@@ -2,7 +2,7 @@
 
 # Auto-relaunch as Administrator if not already elevated
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "Not running as Administrator — relaunching elevated..."
+    Write-Host "Not running as Administrator -- relaunching elevated..."
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }
@@ -11,7 +11,7 @@ $env:DOCKER_HOST = "npipe:////./pipe/rancher-desktop"
 Set-Location $PSScriptRoot
 
 Write-Host ""
-Write-Host "=== LLM Eval Harness — Start Stack ===" -ForegroundColor Cyan
+Write-Host "=== LLM Eval Harness -- Start Stack ===" -ForegroundColor Cyan
 Write-Host "DOCKER_HOST = $env:DOCKER_HOST"
 Write-Host ""
 
@@ -21,10 +21,10 @@ try {
     $content = Get-Content $composePath -Raw
     if ($content -match '(?m)^version:.*\r?\n') {
         $content = $content -replace '(?m)^version:.*\r?\n', ''
-        Set-Content $composePath $content -NoNewline
+        Set-Content $composePath $content -NoNewline -Encoding utf8
         Write-Host "[OK] Removed obsolete 'version' line from docker-compose.yml" -ForegroundColor Green
     } else {
-        Write-Host "[OK] docker-compose.yml has no 'version' line — nothing to remove" -ForegroundColor Green
+        Write-Host "[OK] docker-compose.yml already has no 'version' line" -ForegroundColor Green
     }
 } catch {
     Write-Host "[FAIL] Could not patch docker-compose.yml: $_" -ForegroundColor Red
@@ -64,5 +64,5 @@ try {
 
 Write-Host ""
 Write-Host "=== Stack is UP and healthy ===" -ForegroundColor Green
-Write-Host "Next: run .\dev.ps1 to start the Django dev server and Celery worker."
+Write-Host "Next: run .\dev.ps1 to start the Django server and Celery worker."
 Write-Host ""

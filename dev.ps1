@@ -4,7 +4,7 @@ $env:DOCKER_HOST = "npipe:////./pipe/rancher-desktop"
 Set-Location $PSScriptRoot
 
 Write-Host ""
-Write-Host "=== LLM Eval Harness — Dev Mode ===" -ForegroundColor Cyan
+Write-Host "=== LLM Eval Harness -- Dev Mode ===" -ForegroundColor Cyan
 Write-Host "DOCKER_HOST = $env:DOCKER_HOST"
 Write-Host ""
 
@@ -13,7 +13,7 @@ try {
     $psOutput = docker-compose ps --services --filter "status=running" 2>&1
     $runningServices = $psOutput | Where-Object { $_ -match '\S' }
     if (-not $runningServices) {
-        Write-Host "Stack not running — starting it now..." -ForegroundColor Yellow
+        Write-Host "Stack not running -- starting it now..." -ForegroundColor Yellow
         docker-compose up -d
         if ($LASTEXITCODE -ne 0) { throw "docker-compose up -d failed" }
         Write-Host "Waiting 15 seconds for services..." -ForegroundColor Yellow
@@ -23,7 +23,7 @@ try {
     }
 } catch {
     Write-Host "[FAIL] Could not check/start stack: $_" -ForegroundColor Red
-    Write-Host "Run .\start_stack.ps1 as Administrator first." -ForegroundColor Yellow
+    Write-Host "Run start_stack.ps1 as Administrator first." -ForegroundColor Yellow
     exit 1
 }
 
@@ -63,7 +63,7 @@ try {
 Write-Host ""
 Write-Host "=== Dev environment ready ===" -ForegroundColor Green
 Write-Host ""
-Write-Host "  API docs:      http://localhost:8000/api/docs"  -ForegroundColor White
+Write-Host "  API docs:      http://localhost:8000/api/docs" -ForegroundColor White
 Write-Host "  Health check:  http://localhost:8000/api/health/" -ForegroundColor White
 Write-Host "  MinIO console: http://localhost:9001" -ForegroundColor White
 Write-Host "  (user: minioadmin / minioadmin)" -ForegroundColor DarkGray
