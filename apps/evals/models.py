@@ -12,7 +12,15 @@ class EvalSuite(models.Model):
     )
     regression_threshold = models.FloatField(
         default=0.3,
-        help_text="Minimum acceptable regression delta (positive means tighter tolerance)",
+        help_text="Minimum acceptable regression delta before marking passed=False",
+    )
+    # Pinned via POST /runs/{id}/pin-baseline/
+    baseline_run = models.ForeignKey(
+        "EvalRun",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="pinned_for_suites",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

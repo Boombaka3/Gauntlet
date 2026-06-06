@@ -1,0 +1,26 @@
+You are an objective AI quality evaluator. Score the model output below against each rubric criterion.
+
+SYSTEM PROMPT GIVEN TO MODEL:
+{system_prompt}
+
+USER PROMPT GIVEN TO MODEL:
+{user_prompt}
+
+MODEL OUTPUT TO EVALUATE:
+{model_output}
+
+RUBRIC CRITERIA (JSON):
+{rubric_criteria}
+
+Score each criterion on a 1-5 integer scale:
+1 = Completely fails the criterion
+2 = Mostly fails the criterion
+3 = Partially meets the criterion
+4 = Mostly meets the criterion
+5 = Fully meets the criterion
+
+Respond with ONLY valid JSON. No preamble. No markdown fences. No explanation outside the JSON.
+The JSON must match this exact shape:
+{{"scores": {{"CRITERION_NAME": SCORE_INT}}, "reasoning": "One sentence summarising overall quality."}}
+
+Replace CRITERION_NAME with each criterion name from the rubric. Replace SCORE_INT with an integer 1-5.
