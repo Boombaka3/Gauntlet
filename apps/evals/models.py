@@ -126,8 +126,8 @@ class ScoreResult(models.Model):
         default=dict,
         help_text="{criterion: score} mapping; scores are floats 1–5 or None",
     )
-    overall = models.FloatField()
-    passed = models.BooleanField()
+    overall = models.FloatField(null=True, blank=True)
+    passed = models.BooleanField(null=True, blank=True)
     judge_reasoning = models.TextField(blank=True, null=True)
     regression_delta = models.FloatField(
         null=True,

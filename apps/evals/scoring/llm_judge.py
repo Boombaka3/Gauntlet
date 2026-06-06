@@ -63,10 +63,22 @@ def score_llm_judge(model_run: ModelRun) -> ScoreResult:
             model_run.id,
             raw_response,
         )
-        reasoning = f"JSON parse error — raw: {raw_response[:200]}"
+        return ScoreResult(
+            model_run=model_run,
+            scores={},
+            overall=None,
+            passed=None,
+            judge_reasoning=f"judge_unavailable: JSON parse error — raw: {raw_response[:200]}",
+        )
     except Exception as exc:
         logger.error("score_llm_judge failed for ModelRun %s: %s", model_run.id, exc)
-        reasoning = str(exc)
+        return ScoreResult(
+            model_run=model_run,
+            scores={},
+            overall=None,
+            passed=None,
+            judge_reasoning=f"judge_unavailable: {exc}",
+        )
 
     raw_score = float(scores.get("Quality", 1))
     raw_score = max(1.0, min(5.0, raw_score))

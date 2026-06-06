@@ -124,8 +124,8 @@ class ScoreResultOut(Schema):
     id: int
     model_run_id: int
     scores: dict
-    overall: float
-    passed: bool
+    overall: float | None
+    passed: bool | None
     judge_reasoning: str | None
     regression_delta: float | None
     created_at: datetime

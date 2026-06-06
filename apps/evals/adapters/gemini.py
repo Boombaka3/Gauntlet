@@ -44,27 +44,33 @@ class GeminiAdapter(ModelAdapter):
                 return AdapterResult(output=output, latency_ms=latency_ms, token_count=token_count)
 
             except Exception as exc:
-                exc_str = str(exc)
-                is_rate_limit = (
-                    "429" in exc_str
-                    or "quota" in exc_str.lower()
-                    or "resource_exhausted" in exc_str.lower()
-                    or "rate" in exc_str.lower()
-                )
-                # Also catch google.api_core ResourceExhausted if importable
+                # Explicit check for canonical Google API 429 exception first.
                 try:
                     from google.api_core.exceptions import ResourceExhausted
                     if isinstance(exc, ResourceExhausted):
-                        is_rate_limit = True
+                        if attempt == 0:
+                            logger.warning("Gemini rate limit on %s, retrying after 2s", self.model_id)
+                            time.sleep(2)
+                            continue
+                        return AdapterResult(
+                            output="", latency_ms=0,
+                            error="Gemini rate limit exceeded after retry",
+                        )
                 except ImportError:
                     pass
 
-                if is_rate_limit and attempt == 0:
-                    logger.warning("Gemini rate limit on %s, retrying after 2s", self.model_id)
+                # Fallback string match for environments where google.api_core is unavailable.
+                exc_str = str(exc)
+                if attempt == 0 and (
+                    "429" in exc_str
+                    or "quota" in exc_str.lower()
+                    or "resource_exhausted" in exc_str.lower()
+                ):
+                    logger.warning("Gemini rate limit (string match) on %s, retrying after 2s", self.model_id)
                     time.sleep(2)
                     continue
 
                 logger.error("GeminiAdapter.complete failed [%s]: %s", self.model_id, exc)
-                return AdapterResult(output="", latency_ms=0, error=exc_str)
+                return AdapterResult(output="", latency_ms=0, error=str(exc))
 
         return AdapterResult(output="", latency_ms=0, error="Unknown error in GeminiAdapter")

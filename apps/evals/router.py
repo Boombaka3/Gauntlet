@@ -133,7 +133,11 @@ def create_run(request, data: EvalRunIn):
 
     if data.score_mode == EvalRun.ScoreMode.REGRESSION and data.baseline_run_id is None:
         if suite.baseline_run_id is None:
-            raise HttpError(400, "score_mode=regression requires a baseline_run_id or a pinned baseline on the suite")
+            raise HttpError(
+                400,
+                "score_mode=regression requires a baseline run. "
+                "Pin one with POST /runs/{id}/pin-baseline/ first.",
+            )
         baseline_run_id = suite.baseline_run_id
     else:
         baseline_run_id = data.baseline_run_id

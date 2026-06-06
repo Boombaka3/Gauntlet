@@ -48,10 +48,22 @@ def score_rubric(model_run: ModelRun, rubric: list[dict]) -> ScoreResult:
             model_run.id,
             raw_response,
         )
-        reasoning = f"JSON parse error — raw response: {raw_response[:200]}"
+        return ScoreResult(
+            model_run=model_run,
+            scores={},
+            overall=None,
+            passed=None,
+            judge_reasoning=f"judge_unavailable: JSON parse error — raw: {raw_response[:200]}",
+        )
     except Exception as exc:
         logger.error("score_rubric failed for ModelRun %s: %s", model_run.id, exc)
-        reasoning = str(exc)
+        return ScoreResult(
+            model_run=model_run,
+            scores={},
+            overall=None,
+            passed=None,
+            judge_reasoning=f"judge_unavailable: {exc}",
+        )
 
     overall = _weighted_overall(scores, rubric)
     passed = overall >= PASS_OVERALL_THRESHOLD

@@ -52,10 +52,11 @@ def score_all_results(self, eval_run_id: int, schema_name: str) -> None:
 
             ScoreResult.objects.bulk_create(score_results, ignore_conflicts=True)
 
+            scored = [r for r in score_results if r.overall is not None]
             overall_avg = (
-                sum(r.overall for r in score_results) / len(score_results)
-                if score_results
-                else 0.0
+                sum(r.overall for r in scored) / len(scored)
+                if scored
+                else None
             )
 
             report = {
