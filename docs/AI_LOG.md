@@ -61,3 +61,16 @@ Track what was AI-generated vs manually rewritten each session.
 - None yet.
 
 ---
+
+## Phase 1.5 -- 2026-06-06
+
+Phase 1.5 -- bin/ restructure and tests/ scaffold. All .ps1 rewritten to fix string terminator bug.
+
+- Moved `start_stack.ps1`, `stop_stack.ps1`, `dev.ps1` from project root into `bin/`
+- Root cause of parse error: em dash in UTF-8 encodes as bytes E2 80 94; byte 0x94 is RIGHT DOUBLE QUOTATION MARK in Windows-1252 (PS5.1 default), terminating strings mid-line
+- Fix: all strings in .ps1 files now use single quotes or concatenation; zero non-ASCII characters remain
+- `$PSScriptRoot` in `bin/` scripts resolves to the `bin/` dir; `Split-Path $PSScriptRoot -Parent` reaches project root
+- Created `tests/conftest.py` with `django_db_setup` (session-scoped), `tenant_schema`, and `client` fixtures
+- Created `tests/evals/.gitkeep` placeholder
+
+---
