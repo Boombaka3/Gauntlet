@@ -64,7 +64,7 @@ class PromptCaseOut(Schema):
 
 class EvalRunIn(Schema):
     suite_id: int
-    models: list[str]
+    model_ids: list[str]
     score_mode: str = "llm_judge"
     baseline_run_id: int | None = None
 
@@ -75,7 +75,7 @@ class EvalRunOut(Schema):
     id: int
     suite_id: int
     status: str
-    models: list
+    model_ids: list
     score_mode: str
     baseline_run_id: int | None
     progress: int

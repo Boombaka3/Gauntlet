@@ -6,7 +6,7 @@ from .models import Domain, Tenant
 
 @admin.register(Tenant)
 class TenantAdmin(admin.ModelAdmin):
-    list_display = ("schema_name", "created_on")
+    list_display = ("schema_name",)
     search_fields = ("schema_name",)
 
 

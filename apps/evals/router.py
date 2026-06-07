@@ -144,7 +144,7 @@ def create_run(request, data: EvalRunIn):
 
     eval_run = EvalRun.objects.create(
         suite=suite,
-        models=data.models,
+        model_ids=data.model_ids,
         score_mode=data.score_mode,
         baseline_run_id=baseline_run_id,
         status=EvalRun.Status.PENDING,
@@ -276,7 +276,7 @@ def _run_out(eval_run: EvalRun) -> dict:
         "id": eval_run.id,
         "suite_id": eval_run.suite_id,
         "status": eval_run.status,
-        "models": eval_run.models,
+        "model_ids": eval_run.model_ids,
         "score_mode": eval_run.score_mode,
         "baseline_run_id": eval_run.baseline_run_id,
         "progress": progress,

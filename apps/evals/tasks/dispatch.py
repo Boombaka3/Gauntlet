@@ -26,7 +26,7 @@ def dispatch_eval_run(self, eval_run_id: int, schema_name: str) -> None:
             eval_run.save(update_fields=["status", "started_at"])
 
             cases = list(eval_run.suite.cases.all())
-            model_ids: list[str] = eval_run.models
+            model_ids: list[str] = eval_run.model_ids
 
             if not cases or not model_ids:
                 logger.warning(

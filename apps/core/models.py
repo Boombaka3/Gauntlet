@@ -1,4 +1,5 @@
 # llm_eval_harness/apps/core/models.py
+from django.db import models
 from django_tenants.models import DomainMixin, TenantMixin
 
 
@@ -8,6 +9,8 @@ class Tenant(TenantMixin):
     schema named after schema_name for each tenant's data isolation.
     """
     auto_create_schema = True
+
+    name = models.CharField(max_length=255, blank=True)
 
     class Meta:
         app_label = "core"

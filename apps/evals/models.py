@@ -66,7 +66,7 @@ class EvalRun(models.Model):
 
     suite = models.ForeignKey(EvalSuite, on_delete=models.CASCADE, related_name="runs")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
-    models = models.JSONField(
+    model_ids = models.JSONField(
         help_text="List of model identifier strings to fan out against",
     )
     baseline_run = models.ForeignKey(
