@@ -1,5 +1,4 @@
-# llm_eval_harness/docker-compose.yml
-version: "3.9"
+﻿# llm_eval_harness/docker-compose.yml
 
 services:
   db:
