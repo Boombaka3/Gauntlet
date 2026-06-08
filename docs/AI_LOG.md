@@ -130,6 +130,21 @@ llm_judge path added as optional skip when no API key present.
 
 ---
 
+## Phase 4d -- Deployment config + portfolio docs -- 2026-06-08
+
+Phase 4d -- railway.toml; .railway.env.example; docs/deployment.md
+(Railway fast path + AWS architecture + cost table + shutdown instructions);
+README.md with architecture diagram, stack table, quick start, API table,
+CV bullets; interview_prep.md updated with 7-step live demo script.
+
+- `railway.toml`: Railway deployment config -- Dockerfile builder, gunicorn start command, /api/health/ healthcheck, ON_FAILURE restart policy
+- `.railway.env.example`: all 17 env vars Railway needs with placeholder values
+- `docs/deployment.md`: Railway 10-step fast path; AWS local-to-cloud mapping table; cost table (~$60/mo, free first year); shut down instructions for both platforms
+- `README.md`: project header, what-it-does, ASCII pipeline architecture, full tech stack table, copy-paste quick start, 13-endpoint API table, test command, deployment pointer, CV bullets
+- `docs/interview_prep.md`: added "Live demo script" section -- 7-step walkthrough with Swagger UI through fan-out diagram, covering multi-tenancy, group+chord, partial failure, scoring, and regression tracking
+
+---
+
 ## Phase 3 -- 2026-06-07
 
 End-to-end scripts + pytest suite. 23 tests, all passing.
