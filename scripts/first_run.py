@@ -50,6 +50,8 @@ def main() -> None:
     if all_passed:
         print("All steps passed.")
         print(r"First run complete. Start dev servers with: .\bin\dev.ps1")
+        print("Add your ANTHROPIC_API_KEY to .env to enable LLM judge scoring.")
+        print("Run smoke test with: uv run python scripts/smoke_test.py")
         sys.exit(0)
     else:
         print("First run FAILED. Fix the error above and re-run.")

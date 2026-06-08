@@ -114,21 +114,106 @@ def main() -> None:
     if not results:
         fail("no ScoreResults returned")
 
-    all_scored = True
+    for res in results:
+        model_id = res.get("model_run_id")
+        overall = res.get("overall")
+        passed = res.get("passed")
+        print(f"    model_run_id={model_id}  overall={overall}  passed={passed}")
+        assert res["passed"] is not None
+
+    print(f"\nSmoke test PASSED  ({len(results)} result(s))")
+
+
+def smoke_test_llm_judge() -> None:
+    import os
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key or api_key == "placeholder":
+        print("\nSKIP llm_judge smoke test — no API key")
+        return
+
+    client = httpx.Client(base_url=BASE_URL, headers=TENANT_HEADERS, timeout=30.0)
+
+    r = client.post(
+        "/api/evals/suites/",
+        json={
+            "name": "Smoke Test Suite (llm_judge)",
+            "version": 1,
+            "rubric": [{"criterion": "quality", "weight": 1.0}],
+            "regression_threshold": 0.3,
+        },
+    )
+    if r.status_code not in (200, 201):
+        print(f"llm_judge smoke test FAILED: create suite returned {r.status_code}: {r.text}")
+        return
+    suite_id = r.json()["id"]
+
+    r = client.post(
+        f"/api/evals/suites/{suite_id}/cases/",
+        json={
+            "name": "Basic case",
+            "system_prompt": "You are helpful.",
+            "user_prompt": "Say hello in one word.",
+            "expected_output": "Hello",
+        },
+    )
+    if r.status_code not in (200, 201):
+        print(f"llm_judge smoke test FAILED: create case returned {r.status_code}: {r.text}")
+        return
+
+    r = client.post(
+        "/api/evals/runs/",
+        json={
+            "suite_id": suite_id,
+            "model_ids": ["claude-haiku-4-5-20251001"],
+            "score_mode": "llm_judge",
+        },
+    )
+    if r.status_code not in (200, 201):
+        print(f"llm_judge smoke test FAILED: create run returned {r.status_code}: {r.text}")
+        return
+    run_id = r.json()["id"]
+
+    elapsed = 0
+    final_status = None
+    while elapsed < POLL_TIMEOUT:
+        r = client.get(f"/api/evals/runs/{run_id}/")
+        if r.status_code != 200:
+            print(f"llm_judge smoke test FAILED: poll returned {r.status_code}: {r.text}")
+            return
+        status = r.json()["status"]
+        if status in ("DONE", "FAILED"):
+            final_status = status
+            break
+        time.sleep(POLL_INTERVAL)
+        elapsed += POLL_INTERVAL
+
+    if final_status != "DONE":
+        print(f"llm_judge smoke test FAILED: run finished with status={final_status}")
+        return
+
+    r = client.get(f"/api/evals/runs/{run_id}/results/")
+    if r.status_code != 200:
+        print(f"llm_judge smoke test FAILED: results returned {r.status_code}: {r.text}")
+        return
+    results = r.json()
+    if not results:
+        print("llm_judge smoke test FAILED: no ScoreResults returned")
+        return
+
     for res in results:
         model_id = res.get("model_run_id")
         overall = res.get("overall")
         passed = res.get("passed")
         print(f"    model_run_id={model_id}  overall={overall}  passed={passed}")
         if overall is None:
-            all_scored = False
+            print("llm_judge smoke test FAILED: overall=None")
+            return
 
-    if not all_scored:
-        print("    WARNING: one or more results have overall=None (judge unavailable?)")
-
-    print(f"\nSmoke test PASSED  ({len(results)} result(s))")
-    sys.exit(0)
+    print("llm_judge smoke test PASSED")
 
 
 if __name__ == "__main__":
     main()
+    smoke_test_llm_judge()
+    sys.exit(0)

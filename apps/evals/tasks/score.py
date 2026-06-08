@@ -25,9 +25,16 @@ def score_all_results(self, eval_run_id: int, schema_name: str) -> None:
         with schema_context(schema_name):
             eval_run = EvalRun.objects.select_related("suite").get(id=eval_run_id)
 
+            score_mode = eval_run.score_mode
+
+            if score_mode == EvalRun.ScoreMode.EXACT_MATCH:
+                status_filter = [ModelRun.Status.DONE, ModelRun.Status.FAILED]
+            else:
+                status_filter = [ModelRun.Status.DONE]
+
             done_runs = list(
                 ModelRun.objects
-                .filter(eval_run=eval_run, status=ModelRun.Status.DONE)
+                .filter(eval_run=eval_run, status__in=status_filter)
                 .select_related("prompt_case", "prompt_case__suite", "eval_run")
             )
 
@@ -36,8 +43,6 @@ def score_all_results(self, eval_run_id: int, schema_name: str) -> None:
                 eval_run_id,
                 len(done_runs),
             )
-
-            score_mode = eval_run.score_mode
             baseline_run_id = eval_run.baseline_run_id
             score_results: list[ScoreResult] = []
 

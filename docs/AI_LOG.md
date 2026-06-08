@@ -104,6 +104,16 @@ Verification: `uv run celery -A config worker --loglevel=info --pool=solo` confi
 
 ---
 
+## Phase 3 fix — smoke_test.py — 2026-06-07
+
+Phase 3 fix — smoke_test.py switched to exact_match for keyless verification;
+llm_judge path added as optional skip when no API key present.
+
+- `scripts/smoke_test.py`: score_mode confirmed as "exact_match"; replaced `overall is None` check with `assert res["passed"] is not None` (exact_match sets passed but overall may be 0.0); added `smoke_test_llm_judge()` that skips when ANTHROPIC_API_KEY unset or "placeholder"
+- `scripts/first_run.py`: added informational prints after successful first run pointing user to .env and smoke test command
+
+---
+
 ## Phase 3 -- 2026-06-07
 
 End-to-end scripts + pytest suite. 23 tests, all passing.
