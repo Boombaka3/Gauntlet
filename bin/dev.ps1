@@ -1,11 +1,11 @@
-# C:\LLM Eval Harness\llm_eval_harness\bin\dev.ps1
+﻿# C:\LLM Eval Harness\llm_eval_harness\bin\dev.ps1
 
 $env:DOCKER_HOST = 'npipe:////./pipe/docker_engine'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $projectRoot
 
 Write-Host ''
-Write-Host '=== LLM Eval Harness -- Dev Mode ===' -ForegroundColor Cyan
+Write-Host '=== EvidenceTrace -- Dev Mode ===' -ForegroundColor Cyan
 Write-Host ('DOCKER_HOST = ' + $env:DOCKER_HOST)
 Write-Host ''
 
@@ -78,3 +78,4 @@ Write-Host 'First-run checklist (if not done yet):' -ForegroundColor Yellow
 Write-Host '  1. uv run python manage.py migrate_schemas --shared' -ForegroundColor DarkGray
 Write-Host '  2. uv run python scripts/seed.py' -ForegroundColor DarkGray
 Write-Host ''
+

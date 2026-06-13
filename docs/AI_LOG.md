@@ -194,3 +194,82 @@ End-to-end scripts + pytest suite. 23 tests, all passing.
 - `pyproject.toml`: pytest addopts, python_classes/functions, markers added
 
 ---
+
+
+---
+
+## FE-1 redesign + FE-2 + FE-3 + FE-4 -- Gauntlet design system -- 2026-06-10
+
+Complete frontend redesign with gauntlet design system and useApi hook with mock data fallback.
+
+- `frontend/tailwind.config.js`: added `gauntlet` color token namespace (bg/surface/border/accent/success/warning/danger/muted/text); added Inter + JetBrains Mono to fontFamily
+- `frontend/index.html`: Google Fonts import for Inter:400,500,600 + JetBrains Mono:400,500; title "Gauntlet"
+- `frontend/src/index.css`: body bg-gauntlet-bg + text-gauntlet-text + font Inter
+- `frontend/vite.config.js`: manualChunks (vendor + charts); unchanged otherwise
+- `frontend/src/hooks/useApi.js`: created -- wraps apiFn with loading/error/isMock states; falls back to mockData on error; tick counter enables refetch()
+- `frontend/src/data/mockData.js`: created -- MOCK_SUITES/MOCK_CASES/MOCK_RUNS/MOCK_RESULTS/MOCK_MODELS with realistic sample data
+- `frontend/src/components/MockBanner.jsx`: created -- amber warning bar with pulsing dot; shown when isMock=true
+- `frontend/src/components/ApiStatus.jsx`: created -- polls /api/health/ every 30s; fixed bottom bar; green=connected, red pulsing=offline
+- `frontend/src/components/ErrorState.jsx`: created -- centered error with optional retry button
+- `frontend/src/components/LoadingState.jsx`: created -- N skeleton rows with animate-pulse
+- `frontend/src/components/StatusBadge.jsx`: rewritten -- gauntlet tokens; RUNNING animate-pulse; size prop (sm/lg)
+- `frontend/src/components/Sidebar.jsx`: created -- 240px fixed; brand + nav with SVG icons; active state border-l-2 accent
+- `frontend/src/components/Layout.jsx`: rewritten -- uses Sidebar + ApiStatus; pb-8 for status bar
+- `frontend/src/components/ProgressBar.jsx`: created -- current/total label + accent fill with transition-all duration-500
+- `frontend/src/components/ScoreBar.jsx`: created -- color by threshold ≥0.8=success ≥0.5=warning <0.5=danger; null → N/A
+- `frontend/src/components/DeltaBadge.jsx`: created -- +/- with success/danger/muted; null → "--"
+- `frontend/src/components/ModelCompare.jsx`: created -- sorted table descending; uses ScoreBar + DeltaBadge
+- `frontend/src/api/client.js`: rewritten -- removed X-API-Key header entirely; simplified to one-liner exports
+- `frontend/src/pages/Suites.jsx`: rewritten with useApi + MOCK_SUITES; gauntlet tokens; dynamic rubric create form
+- `frontend/src/pages/Cases.jsx`: rewritten with useApi + MOCK_CASES; gauntlet tokens; inline add/delete
+- `frontend/src/pages/NewRun.jsx`: rewritten with useApi + MOCK_SUITES + MOCK_MODELS; score mode as radio CARDS; gauntlet tokens
+- `frontend/src/pages/Runs.jsx`: rewritten -- info box with gauntlet tokens; New Run CTA
+- `frontend/src/pages/RunStatus.jsx`: rewritten -- manual interval polling (no useApi); MOCK_RUNS fallback; duration calculation; gauntlet tokens
+- `frontend/src/pages/Results.jsx`: rewritten with useApi + MOCK_RESULTS; 4 stat cards; ModelCompare; grouped by case; regression summary
+- `frontend/src/App.jsx`: updated -- models route now uses gauntlet inline placeholder
+- `config/urls.py`: catch-all regex updated to also exclude /admin/ and /static/
+- Build verified: `npm run build` → 57 modules, 6 output files, 0 errors
+- Dev server verified: starts cleanly on localhost:5175 (5173/5174 in use from other processes)
+
+---
+
+## EvidenceTrace migration — 2026-06-10
+
+Gauntlet upgraded to biomedical claim conflict detection pipeline. apps/evals → apps/evidence. New models: Paper, Claim, ConflictPair, RewardScore, AnalysisJob. New tasks: extract_claims, build_conflict_graph, dispatch. Level 1 RL: consistency reward voting across N samples. Prompt files replaced for claim extraction and conflict judgment.
+
+- Branch: evidencetrace (created from main)
+- `pyproject.toml`: name=evidence-trace, description updated, added pdfplumber>=0.11.0, sentence-transformers>=3.0.0, torch>=2.0.0
+- `bin/dev.ps1`, `bin/start_stack.ps1`: banner changed from "LLM Eval Harness" to "EvidenceTrace"
+- `config/settings.py`: TENANT_APPS apps.evals → apps.evidence
+- `config/celery.py`: Celery app name "evidence_trace", autodiscover apps.evidence
+- `config/urls.py`: api prefix /api/evals/ → /api/evidence/, import from apps.evidence.router
+- `apps/evidence/__init__.py`: new app
+- `apps/evidence/models.py`: 5 models — AnalysisJob, Paper, Claim, ConflictPair, RewardScore; TenantModel alias for models.Model
+- `apps/evidence/admin.py`: admin for all 5 models
+- `apps/evidence/schemas.py`: JobIn/Out, PaperOut, ClaimOut, ConflictPairOut, RewardScoreOut, ReportOut
+- `apps/evidence/router.py`: 8 endpoints — POST/GET jobs, POST/GET papers (multipart PDF upload → S3), POST dispatch, GET claims, GET conflicts, GET report
+- `apps/evidence/adapters/base.py`: AdapterResult + ModelAdapter.for_claude() factory
+- `apps/evidence/adapters/anthropic.py`: AnthropicAdapter (retry on rate limit)
+- `apps/evidence/prompts/claim_extractor.txt`: JSON claim extraction prompt
+- `apps/evidence/prompts/conflict_judge.txt`: JSON conflict judgment prompt
+- `apps/evidence/utils/pdf_parser.py`: pdfplumber section extractor (body/abstract/methods/results/discussion sections)
+- `apps/evidence/scoring/conflict_judge.py`: judge_conflict(claim_a, claim_b) → unsaved ConflictPair
+- `apps/evidence/scoring/reward_voting.py`: compute_reward(conflict_pair_id, n_samples) → unsaved RewardScore; consistency = majority_count / n_samples
+- `apps/evidence/tasks/extract_claims.py`: @shared_task; reads PDF from S3, extract_sections, Claude per section, create Claim rows
+- `apps/evidence/tasks/build_graph.py`: @shared_task; cross-paper claim pairs → judge_conflict → RewardScore → mark job DONE
+- `apps/evidence/tasks/dispatch.py`: @shared_task; Celery chord — group(extract_claims) | build_conflict_graph
+- `apps/evidence/migrations/0001_initial.py`: auto-generated by makemigrations evidence
+- `scripts/smoke_test.py`: new flow — create job, upload 2 synthetic PDFs, dispatch, poll until DONE, assert conflicts
+- Verified: makemigrations evidence → 0001_initial.py; manage.py check → 0 issues; migrate_schemas --shared → OK
+
+---
+
+## EvidenceTrace Phase 4a migration complete — 2026-06-11
+
+EvidenceTrace migration complete. Gauntlet → EvidenceTrace on branch
+evidencetrace. apps/evals → apps/evidence. New models: Paper, Claim,
+ConflictPair, RewardScore, AnalysisJob. New tasks: extract_claims (PDF →
+Claude → Claim objects), build_conflict_graph (pairwise conflict detection
++ Level 1 RL consistency voting), dispatch (group+chord fan-out).
+Prompt files: claim_extractor.txt + conflict_judge.txt. Admin registered.
+Smoke test updated for EvidenceTrace pipeline.

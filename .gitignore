@@ -9,3 +9,6 @@ build/
 staticfiles/
 *.log
 .DS_Store
+
+# EvidenceLens reference source (do not commit raw scripts)
+evidencelens_src/

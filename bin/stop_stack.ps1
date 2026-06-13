@@ -1,4 +1,4 @@
-# C:\LLM Eval Harness\llm_eval_harness\bin\stop_stack.ps1
+﻿# C:\LLM Eval Harness\llm_eval_harness\bin\stop_stack.ps1
 
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host 'Not running as Administrator -- relaunching elevated...'
@@ -11,7 +11,7 @@ $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $projectRoot
 
 Write-Host ''
-Write-Host '=== LLM Eval Harness -- Stop Stack ===' -ForegroundColor Cyan
+Write-Host '=== EvidenceTrace -- Stop Stack ===' -ForegroundColor Cyan
 Write-Host ('DOCKER_HOST = ' + $env:DOCKER_HOST)
 Write-Host ''
 
@@ -25,3 +25,4 @@ try {
 }
 
 Write-Host ''
+

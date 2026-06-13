@@ -20,7 +20,10 @@ export default function App() {
         <Route path="/runs/:id" element={<RunStatus />} />
         <Route path="/runs/:id/results" element={<Results />} />
         <Route path="/models" element={
-          <div className="text-slate-400 text-sm">Models info -- coming soon.</div>
+          <div className="px-8 py-8">
+            <h1 className="text-2xl font-semibold text-gauntlet-text mb-2">Models</h1>
+            <p className="text-gauntlet-muted text-sm">Available models are configured via the API. Use New Run to select models.</p>
+          </div>
         } />
       </Routes>
     </Layout>

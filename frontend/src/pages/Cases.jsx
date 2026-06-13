@@ -1,7 +1,12 @@
 // frontend/src/pages/Cases.jsx
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
-import { getSuite, listCases, createCase, deleteCase } from '../api/client.js'
+import { useState } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import { useApi } from '../hooks/useApi.js'
+import { listCases, getSuite, createCase, deleteCase } from '../api/client.js'
+import { MOCK_CASES } from '../data/mockData.js'
+import { MockBanner } from '../components/MockBanner.jsx'
+import { LoadingState } from '../components/LoadingState.jsx'
+import { ErrorState } from '../components/ErrorState.jsx'
 
 function trunc(str, n) {
   if (!str) return '--'
@@ -10,219 +15,187 @@ function trunc(str, n) {
 
 export default function Cases() {
   const { id } = useParams()
-  const navigate = useNavigate()
+  const suiteId = parseInt(id, 10)
 
-  const [suite, setSuite] = useState(null)
-  const [cases, setCases] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const { data: suite } = useApi(() => getSuite(suiteId), null, [suiteId])
+  const { data: cases, loading, error, isMock, refetch } = useApi(
+    () => listCases(suiteId),
+    MOCK_CASES,
+    [suiteId]
+  )
+
   const [showForm, setShowForm] = useState(false)
-
-  const [formName, setFormName] = useState('')
-  const [formSystem, setFormSystem] = useState('')
-  const [formUser, setFormUser] = useState('')
-  const [formExpected, setFormExpected] = useState('')
-  const [formError, setFormError] = useState(null)
+  const [form, setForm] = useState({ name: '', system_prompt: '', user_prompt: '', expected_output: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState(null)
+  const [deleting, setDeleting] = useState(null)
 
-  async function load() {
-    setLoading(true)
-    setError(null)
-    try {
-      const [s, c] = await Promise.all([getSuite(id), listCases(id)])
-      setSuite(s)
-      setCases(c)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
+  function updateForm(field, val) {
+    setForm(f => ({ ...f, [field]: val }))
   }
 
-  useEffect(() => { load() }, [id])
-
-  async function handleDelete(caseId) {
-    if (!window.confirm('Delete this case?')) return
-    try {
-      await deleteCase(caseId)
-      await load()
-    } catch (e) {
-      alert('Delete failed: ' + e.message)
-    }
-  }
-
-  async function handleAdd(e) {
+  async function handleCreate(e) {
     e.preventDefault()
     setFormError(null)
-    if (!formName.trim()) { setFormError('Name is required'); return }
-    if (!formUser.trim()) { setFormError('User prompt is required'); return }
+    if (!form.name.trim()) { setFormError('Name is required.'); return }
+    if (!form.user_prompt.trim()) { setFormError('User prompt is required.'); return }
     setSubmitting(true)
     try {
-      await createCase(id, {
-        name: formName.trim(),
-        system_prompt: formSystem.trim(),
-        user_prompt: formUser.trim(),
-        expected_output: formExpected.trim() || null,
+      await createCase(suiteId, {
+        name: form.name.trim(),
+        system_prompt: form.system_prompt.trim(),
+        user_prompt: form.user_prompt.trim(),
+        expected_output: form.expected_output.trim() || null,
         tags: [],
       })
-      setFormName(''); setFormSystem(''); setFormUser(''); setFormExpected('')
+      setForm({ name: '', system_prompt: '', user_prompt: '', expected_output: '' })
       setShowForm(false)
-      await load()
-    } catch (e) {
-      setFormError(e.message)
+      refetch()
+    } catch (err) {
+      setFormError(err.message)
     } finally {
       setSubmitting(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-slate-400 text-sm">
-        <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-        Loading...
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="border border-red-700 bg-red-950 text-red-400 text-sm px-4 py-3">
-        Error: {error}
-      </div>
-    )
+  async function handleDelete(caseId) {
+    setDeleting(caseId)
+    try {
+      await deleteCase(caseId)
+      refetch()
+    } catch (err) {
+      alert(`Delete failed: ${err.message}`)
+    } finally {
+      setDeleting(null)
+    }
   }
 
   return (
-    <div>
-      <div className="mb-5">
-        <Link to="/suites" className="text-slate-400 hover:text-white text-sm">
-          ← Back to Suites
-        </Link>
-        <div className="mt-3 flex items-baseline gap-3">
-          <h1 className="text-xl font-semibold text-white">{suite?.name}</h1>
-          <span className="text-slate-400 text-sm">Cases</span>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-sm text-slate-400">{cases.length} case{cases.length !== 1 ? 's' : ''}</span>
-        <button
-          onClick={() => { setShowForm(!showForm); setFormError(null) }}
-          className="bg-indigo-500 hover:bg-indigo-600 text-white text-sm px-4 py-1.5 transition-colors"
-        >
-          {showForm ? 'Cancel' : '+ Add Case'}
-        </button>
-      </div>
-
-      {showForm && (
-        <form onSubmit={handleAdd} className="border border-slate-700 bg-slate-900 p-5 mb-6 space-y-4">
-          <div className="text-sm font-medium text-slate-300">Add Case</div>
-
+    <div className="min-h-screen bg-gauntlet-bg">
+      {isMock && <MockBanner />}
+      <div className="px-8 py-8">
+        <div className="flex items-center justify-between mb-2">
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Case name *</label>
-            <input
-              type="text"
-              value={formName}
-              onChange={e => setFormName(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm px-3 py-1.5 focus:outline-none focus:border-indigo-500"
-            />
+            <div className="flex items-center gap-2 text-gauntlet-muted text-xs font-mono mb-1">
+              <Link to="/suites" className="hover:text-gauntlet-accent">Suites</Link>
+              <span>/</span>
+              <span>{suite?.name || `Suite ${suiteId}`}</span>
+            </div>
+            <h1 className="text-2xl font-semibold text-gauntlet-text">Cases</h1>
           </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">System prompt</label>
-            <textarea
-              rows={3}
-              value={formSystem}
-              onChange={e => setFormSystem(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm px-3 py-1.5 focus:outline-none focus:border-indigo-500 resize-y font-mono"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">User prompt *</label>
-            <textarea
-              rows={3}
-              value={formUser}
-              onChange={e => setFormUser(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm px-3 py-1.5 focus:outline-none focus:border-indigo-500 resize-y font-mono"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Expected output</label>
-            <textarea
-              rows={2}
-              value={formExpected}
-              onChange={e => setFormExpected(e.target.value)}
-              placeholder="Leave blank for LLM judge scoring"
-              className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm px-3 py-1.5 focus:outline-none focus:border-indigo-500 resize-y font-mono placeholder-slate-600"
-            />
-          </div>
-
-          {formError && <div className="text-red-400 text-sm">{formError}</div>}
-
           <div className="flex gap-3">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white text-sm px-5 py-1.5"
+            <Link
+              to={`/runs/new?suite_id=${suiteId}`}
+              className="bg-gauntlet-success hover:bg-gauntlet-success/80 text-white text-sm font-medium px-4 py-2 transition-colors"
             >
-              {submitting ? 'Adding...' : 'Add Case'}
-            </button>
+              Run this suite →
+            </Link>
             <button
-              type="button"
-              onClick={() => { setShowForm(false); setFormError(null) }}
-              className="text-slate-400 hover:text-white text-sm px-4 py-1.5"
+              onClick={() => setShowForm(v => !v)}
+              className="bg-gauntlet-accent hover:bg-gauntlet-accent/80 text-white text-sm font-medium px-4 py-2 transition-colors"
             >
-              Cancel
+              + Add Case
             </button>
           </div>
-        </form>
-      )}
-
-      {cases.length === 0 ? (
-        <div className="text-slate-500 text-sm py-8 text-center border border-slate-700">
-          No cases yet. Add one to run evaluations.
         </div>
-      ) : (
-        <table className="w-full text-sm text-slate-200 border border-slate-700">
-          <thead>
-            <tr className="bg-slate-800 text-slate-400 text-xs uppercase">
-              <th className="text-left px-3 py-2">Name</th>
-              <th className="text-left px-3 py-2">System Prompt</th>
-              <th className="text-left px-3 py-2">User Prompt</th>
-              <th className="text-left px-3 py-2">Expected Output</th>
-              <th className="text-left px-3 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cases.map(c => (
-              <tr key={c.id} className="border-t border-slate-700 hover:bg-slate-800">
-                <td className="px-3 py-2 font-medium text-white">{c.name}</td>
-                <td className="px-3 py-2 text-slate-400 font-mono text-xs">{trunc(c.system_prompt, 60)}</td>
-                <td className="px-3 py-2 text-slate-300 font-mono text-xs">{trunc(c.user_prompt, 60)}</td>
-                <td className="px-3 py-2 text-slate-400 font-mono text-xs">{trunc(c.expected_output, 40)}</td>
-                <td className="px-3 py-2">
-                  <button
-                    onClick={() => handleDelete(c.id)}
-                    className="text-red-400 hover:text-red-300 text-xs"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
 
-      <div className="mt-8 pt-6 border-t border-slate-700">
-        <button
-          onClick={() => navigate(`/runs/new?suite_id=${id}`)}
-          className="bg-green-600 hover:bg-green-700 text-white text-sm px-5 py-2 transition-colors"
-        >
-          Run this suite →
-        </button>
+        {showForm && (
+          <div className="bg-gauntlet-surface border border-gauntlet-border p-6 mb-8 mt-6">
+            <h2 className="text-gauntlet-text font-medium text-sm mb-4">Add Case</h2>
+            <form onSubmit={handleCreate} className="space-y-4">
+              {[
+                { field: 'name', label: 'Name', placeholder: 'Short description', multiline: false },
+                { field: 'system_prompt', label: 'System Prompt', placeholder: 'You are a helpful assistant.', multiline: true },
+                { field: 'user_prompt', label: 'User Prompt *', placeholder: 'What is 2+2?', multiline: true },
+                { field: 'expected_output', label: 'Expected Output', placeholder: 'Leave blank for LLM judge scoring', multiline: true },
+              ].map(({ field, label, placeholder, multiline }) => (
+                <div key={field}>
+                  <label className="block text-gauntlet-muted text-xs font-mono mb-1">{label}</label>
+                  {multiline ? (
+                    <textarea
+                      rows={3}
+                      value={form[field]}
+                      onChange={e => updateForm(field, e.target.value)}
+                      className="w-full bg-gauntlet-bg border border-gauntlet-border text-gauntlet-text text-sm px-3 py-2 focus:outline-none focus:border-gauntlet-accent resize-y font-mono"
+                      placeholder={placeholder}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={form[field]}
+                      onChange={e => updateForm(field, e.target.value)}
+                      className="w-full bg-gauntlet-bg border border-gauntlet-border text-gauntlet-text text-sm px-3 py-2 focus:outline-none focus:border-gauntlet-accent"
+                      placeholder={placeholder}
+                    />
+                  )}
+                </div>
+              ))}
+              {formError && <p className="text-gauntlet-danger text-xs font-mono">{formError}</p>}
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="bg-gauntlet-accent hover:bg-gauntlet-accent/80 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 transition-colors"
+                >
+                  {submitting ? 'Saving...' : 'Save Case'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="bg-gauntlet-border hover:bg-gauntlet-border/80 text-gauntlet-text text-sm font-medium px-4 py-2 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        <div className="mt-6">
+          {loading && <LoadingState rows={5} />}
+          {error && <ErrorState message={error} onRetry={refetch} />}
+          {!loading && !error && cases && (
+            <div className="border border-gauntlet-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gauntlet-surface text-gauntlet-muted text-xs uppercase tracking-wider">
+                    <th className="text-left px-6 py-3 border-b border-gauntlet-border">Name</th>
+                    <th className="text-left px-6 py-3 border-b border-gauntlet-border">System Prompt</th>
+                    <th className="text-left px-6 py-3 border-b border-gauntlet-border">User Prompt</th>
+                    <th className="text-left px-6 py-3 border-b border-gauntlet-border">Expected</th>
+                    <th className="text-left px-6 py-3 border-b border-gauntlet-border">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cases.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-gauntlet-muted text-sm">
+                        No cases yet. Add one above.
+                      </td>
+                    </tr>
+                  )}
+                  {cases.map(c => (
+                    <tr key={c.id} className="border-b border-gauntlet-border hover:bg-gauntlet-surface/50">
+                      <td className="px-6 py-4 text-gauntlet-text font-medium">{c.name}</td>
+                      <td className="px-6 py-4 text-gauntlet-muted font-mono text-xs">{trunc(c.system_prompt, 50)}</td>
+                      <td className="px-6 py-4 text-gauntlet-muted font-mono text-xs">{trunc(c.user_prompt, 50)}</td>
+                      <td className="px-6 py-4 text-gauntlet-muted font-mono text-xs">{trunc(c.expected_output, 30)}</td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleDelete(c.id)}
+                          disabled={deleting === c.id}
+                          className="text-gauntlet-danger hover:text-gauntlet-danger/80 text-xs font-mono disabled:opacity-50"
+                        >
+                          {deleting === c.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

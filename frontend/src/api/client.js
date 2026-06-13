@@ -1,15 +1,10 @@
 // frontend/src/api/client.js
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
-const API_KEY = import.meta.env.VITE_API_KEY || ''
+const BASE = import.meta.env.VITE_API_BASE || '/api'
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
-      ...options.headers,
-    },
   })
   if (!res.ok) {
     let msg = `HTTP ${res.status}`
@@ -23,75 +18,20 @@ async function request(path, options = {}) {
   return res.json()
 }
 
-// Suites
-export async function listSuites() {
-  return request('/evals/suites/')
-}
+export const listSuites = () => request('/evals/suites/')
+export const getSuite = (id) => request(`/evals/suites/${id}/`)
+export const createSuite = (data) => request('/evals/suites/', { method: 'POST', body: JSON.stringify(data) })
+export const patchSuite = (id, data) => request(`/evals/suites/${id}/`, { method: 'PATCH', body: JSON.stringify(data) })
 
-export async function createSuite(data) {
-  return request('/evals/suites/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
+export const listCases = (suiteId) => request(`/evals/suites/${suiteId}/cases/`)
+export const createCase = (suiteId, data) => request(`/evals/suites/${suiteId}/cases/`, { method: 'POST', body: JSON.stringify(data) })
+export const deleteCase = (caseId) => request(`/evals/cases/${caseId}/`, { method: 'DELETE' })
 
-export async function getSuite(id) {
-  return request(`/evals/suites/${id}/`)
-}
+export const createRun = (data) => request('/evals/runs/', { method: 'POST', body: JSON.stringify(data) })
+export const getRun = (id) => request(`/evals/runs/${id}/`)
+export const getRunResults = (id) => request(`/evals/runs/${id}/results/`)
+export const getRegression = (id) => request(`/evals/runs/${id}/regression/`)
+export const pinBaseline = (id) => request(`/evals/runs/${id}/pin-baseline/`, { method: 'POST' })
 
-export async function patchSuite(id, data) {
-  return request(`/evals/suites/${id}/`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  })
-}
-
-// Cases
-export async function listCases(suiteId) {
-  return request(`/evals/suites/${suiteId}/cases/`)
-}
-
-export async function createCase(suiteId, data) {
-  return request(`/evals/suites/${suiteId}/cases/`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function deleteCase(caseId) {
-  return request(`/evals/cases/${caseId}/`, { method: 'DELETE' })
-}
-
-// Runs
-export async function createRun(data) {
-  return request('/evals/runs/', {
-    method: 'POST',
-    body: JSON.stringify({
-      suite_id: data.suite_id,
-      model_ids: data.model_ids,
-      score_mode: data.score_mode,
-      baseline_run_id: data.baseline_run_id || null,
-    }),
-  })
-}
-
-export async function getRun(runId) {
-  return request(`/evals/runs/${runId}/`)
-}
-
-export async function getRunResults(runId) {
-  return request(`/evals/runs/${runId}/results/`)
-}
-
-export async function getRegression(runId) {
-  return request(`/evals/runs/${runId}/regression/`)
-}
-
-export async function pinBaseline(runId) {
-  return request(`/evals/runs/${runId}/pin-baseline/`, { method: 'POST' })
-}
-
-// Models
-export async function listModels() {
-  return request('/evals/models/')
-}
+export const listModels = () => request('/evals/models/')
+export const getHealth = () => request('/health/')

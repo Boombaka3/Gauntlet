@@ -1,59 +1,52 @@
 // frontend/src/pages/NewRun.jsx
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useApi } from '../hooks/useApi.js'
 import { listSuites, listModels, createRun } from '../api/client.js'
+import { MOCK_SUITES, MOCK_MODELS } from '../data/mockData.js'
+import { MockBanner } from '../components/MockBanner.jsx'
+import { LoadingState } from '../components/LoadingState.jsx'
+import { ErrorState } from '../components/ErrorState.jsx'
 
 const SCORE_MODES = [
-  { value: 'exact_match', label: 'Exact Match -- compare to expected output' },
-  { value: 'rubric', label: 'Rubric -- score against suite criteria' },
-  { value: 'llm_judge', label: 'LLM Judge -- Claude evaluates quality' },
-  { value: 'regression', label: 'Regression -- compare against baseline run' },
+  { value: 'exact_match', label: 'Exact Match', desc: 'Compare output to expected string' },
+  { value: 'rubric', label: 'Rubric', desc: 'Score against suite criteria weights' },
+  { value: 'llm_judge', label: 'LLM Judge', desc: 'Claude evaluates quality holistically' },
+  { value: 'regression', label: 'Regression', desc: 'Compare delta against a baseline run' },
 ]
 
 export default function NewRun() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const preselectedSuiteId = searchParams.get('suite_id')
+  const preselectedSuiteId = searchParams.get('suite_id') || ''
 
-  const [suites, setSuites] = useState([])
-  const [models, setModels] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const { data: suites, loading: loadingSuites, error: errorSuites, isMock: mockSuites } =
+    useApi(listSuites, MOCK_SUITES)
+  const { data: models, loading: loadingModels, error: errorModels, isMock: mockModels } =
+    useApi(listModels, MOCK_MODELS)
 
-  const [suiteId, setSuiteId] = useState(preselectedSuiteId || '')
+  const [suiteId, setSuiteId] = useState(preselectedSuiteId)
   const [selectedModels, setSelectedModels] = useState([])
-  const [scoreMode, setScoreMode] = useState('exact_match')
+  const [scoreMode, setScoreMode] = useState('rubric')
   const [baselineRunId, setBaselineRunId] = useState('')
   const [submitError, setSubmitError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [s, m] = await Promise.all([listSuites(), listModels()])
-        setSuites(s)
-        setModels(m)
-        if (preselectedSuiteId && !suiteId) setSuiteId(preselectedSuiteId)
-      } catch (e) {
-        setError(e.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [])
+  const isMock = mockSuites || mockModels
+  const loading = loadingSuites || loadingModels
+  const error = errorSuites || errorModels
 
-  function toggleModel(model) {
+  function toggleModel(m) {
     setSelectedModels(prev =>
-      prev.includes(model) ? prev.filter(m => m !== model) : [...prev, model]
+      prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]
     )
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
     setSubmitError(null)
-    if (!suiteId) { setSubmitError('Select a suite'); return }
-    if (selectedModels.length === 0) { setSubmitError('Select at least one model'); return }
+    if (!suiteId) { setSubmitError('Select a suite.'); return }
+    if (selectedModels.length === 0) { setSubmitError('Select at least one model.'); return }
     setSubmitting(true)
     try {
       const run = await createRun({
@@ -65,123 +58,129 @@ export default function NewRun() {
           : null,
       })
       navigate(`/runs/${run.id}`)
-    } catch (e) {
-      setSubmitError(e.message)
+    } catch (err) {
+      setSubmitError(err.message)
     } finally {
       setSubmitting(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-slate-400 text-sm">
-        <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-        Loading...
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="border border-red-700 bg-red-950 text-red-400 text-sm px-4 py-3">
-        Error: {error}
-      </div>
-    )
-  }
-
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-xl font-semibold text-white mb-6">New Run</h1>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Suite */}
-        <div>
-          <label className="block text-xs text-slate-400 mb-1.5 uppercase tracking-wide">Suite</label>
-          <select
-            value={suiteId}
-            onChange={e => setSuiteId(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-indigo-500"
-          >
-            <option value="">-- Select a suite --</option>
-            {suites.map(s => (
-              <option key={s.id} value={s.id}>{s.name} (v{s.version})</option>
-            ))}
-          </select>
+    <div className="min-h-screen bg-gauntlet-bg">
+      {isMock && <MockBanner />}
+      <div className="px-8 py-8">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-gauntlet-text">New Run</h1>
+          <p className="text-gauntlet-muted text-sm mt-1">Configure and dispatch an evaluation run</p>
         </div>
 
-        {/* Models */}
-        <div>
-          <label className="block text-xs text-slate-400 mb-1.5 uppercase tracking-wide">
-            Models <span className="text-slate-600 normal-case">(select one or more)</span>
-          </label>
-          <div className="border border-slate-700 divide-y divide-slate-700 max-h-64 overflow-y-auto">
-            {models.map(m => (
-              <label
-                key={m}
-                className="flex items-center gap-3 px-3 py-2 hover:bg-slate-800 cursor-pointer"
+        {loading && <LoadingState rows={6} />}
+        {error && <ErrorState message={error} />}
+
+        {!loading && !error && suites && models && (
+          <form onSubmit={handleSubmit} className="max-w-2xl space-y-8">
+            {/* Suite */}
+            <div>
+              <label className="block text-gauntlet-muted text-xs font-mono uppercase tracking-wider mb-2">
+                Suite
+              </label>
+              <select
+                value={suiteId}
+                onChange={e => setSuiteId(e.target.value)}
+                className="w-full bg-gauntlet-surface border border-gauntlet-border text-gauntlet-text text-sm px-3 py-2 focus:outline-none focus:border-gauntlet-accent"
               >
-                <input
-                  type="checkbox"
-                  checked={selectedModels.includes(m)}
-                  onChange={() => toggleModel(m)}
-                  className="accent-indigo-500"
-                />
-                <span className="font-mono text-sm text-slate-200">{m}</span>
+                <option value="">-- Select a suite --</option>
+                {suites.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} (v{s.version})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Models */}
+            <div>
+              <label className="block text-gauntlet-muted text-xs font-mono uppercase tracking-wider mb-2">
+                Models <span className="normal-case">— select one or more</span>
               </label>
-            ))}
-          </div>
-        </div>
+              <div className="border border-gauntlet-border divide-y divide-gauntlet-border max-h-64 overflow-y-auto">
+                {models.map(m => (
+                  <label
+                    key={m}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-gauntlet-surface cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedModels.includes(m)}
+                      onChange={() => toggleModel(m)}
+                      className="accent-gauntlet-accent"
+                    />
+                    <span className="font-mono text-sm text-gauntlet-text">{m}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
 
-        {/* Score mode */}
-        <div>
-          <label className="block text-xs text-slate-400 mb-1.5 uppercase tracking-wide">Score Mode</label>
-          <div className="space-y-2">
-            {SCORE_MODES.map(({ value, label }) => (
-              <label key={value} className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="scoreMode"
-                  value={value}
-                  checked={scoreMode === value}
-                  onChange={() => setScoreMode(value)}
-                  className="mt-0.5 accent-indigo-500"
-                />
-                <span className="text-sm text-slate-300">{label}</span>
+            {/* Score mode radio cards */}
+            <div>
+              <label className="block text-gauntlet-muted text-xs font-mono uppercase tracking-wider mb-2">
+                Score Mode
               </label>
-            ))}
-          </div>
-        </div>
+              <div className="grid grid-cols-2 gap-3">
+                {SCORE_MODES.map(({ value, label, desc }) => (
+                  <div
+                    key={value}
+                    onClick={() => setScoreMode(value)}
+                    className={`cursor-pointer border p-4 transition-colors ${
+                      scoreMode === value
+                        ? 'border-gauntlet-accent bg-gauntlet-accent/5'
+                        : 'border-gauntlet-border bg-gauntlet-surface hover:border-gauntlet-muted'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${
+                        scoreMode === value
+                          ? 'border-gauntlet-accent bg-gauntlet-accent'
+                          : 'border-gauntlet-muted'
+                      }`} />
+                      <span className="text-gauntlet-text text-sm font-medium">{label}</span>
+                    </div>
+                    <p className="text-gauntlet-muted text-xs ml-5">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-        {/* Baseline run ID (regression only) */}
-        {scoreMode === 'regression' && (
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5 uppercase tracking-wide">
-              Baseline Run ID
-            </label>
-            <input
-              type="text"
-              value={baselineRunId}
-              onChange={e => setBaselineRunId(e.target.value)}
-              placeholder="Enter baseline EvalRun ID"
-              className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-indigo-500 font-mono"
-            />
-          </div>
+            {/* Baseline run ID (regression only) */}
+            {scoreMode === 'regression' && (
+              <div>
+                <label className="block text-gauntlet-muted text-xs font-mono uppercase tracking-wider mb-2">
+                  Baseline Run ID
+                </label>
+                <input
+                  type="number"
+                  value={baselineRunId}
+                  onChange={e => setBaselineRunId(e.target.value)}
+                  placeholder="Enter baseline EvalRun ID"
+                  className="w-full bg-gauntlet-surface border border-gauntlet-border text-gauntlet-text text-sm px-3 py-2 focus:outline-none focus:border-gauntlet-accent font-mono"
+                />
+              </div>
+            )}
+
+            {submitError && (
+              <div className="border border-gauntlet-danger/30 bg-gauntlet-danger/10 text-gauntlet-danger text-sm px-4 py-3 font-mono">
+                {submitError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full bg-gauntlet-accent hover:bg-gauntlet-accent/80 disabled:opacity-50 text-white text-sm font-medium py-3 transition-colors"
+            >
+              {submitting ? 'Dispatching...' : 'Dispatch Run'}
+            </button>
+          </form>
         )}
-
-        {submitError && (
-          <div className="border border-red-700 bg-red-950 text-red-400 text-sm px-4 py-3">
-            {submitError}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white text-sm py-2.5 font-medium transition-colors"
-        >
-          {submitting ? 'Dispatching...' : 'Dispatch Run'}
-        </button>
-      </form>
+      </div>
     </div>
   )
 }

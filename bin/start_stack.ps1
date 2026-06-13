@@ -1,4 +1,4 @@
-# C:\LLM Eval Harness\llm_eval_harness\bin\start_stack.ps1
+﻿# C:\LLM Eval Harness\llm_eval_harness\bin\start_stack.ps1
 
 # Self-elevate to Administrator if not already elevated
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -12,7 +12,7 @@ $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $projectRoot
 
 Write-Host ''
-Write-Host '=== LLM Eval Harness -- Start Stack ===' -ForegroundColor Cyan
+Write-Host '=== EvidenceTrace -- Start Stack ===' -ForegroundColor Cyan
 Write-Host ('DOCKER_HOST = ' + $env:DOCKER_HOST)
 Write-Host ''
 
@@ -72,3 +72,5 @@ Write-Host '  Admin:  http://localhost:8000/admin/' -ForegroundColor White
 Write-Host ''
 Write-Host 'Run bin\dev.ps1 to start Django and Celery.' -ForegroundColor Cyan
 Write-Host ''
+
+

@@ -16,8 +16,8 @@ try:
 except RuntimeError:
     pass
 
-app = Celery("llm_eval_harness")
+app = Celery("evidence_trace")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 # force=True: import task modules immediately so @shared_task decorators fire
 # now rather than waiting for the worker's deferred finalize() signal.
-app.autodiscover_tasks(["apps.evals"], force=True)
+app.autodiscover_tasks(["apps.evidence"], force=True)

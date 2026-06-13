@@ -9,14 +9,22 @@ export default defineConfig(({ mode }) => ({
     outDir: '../staticfiles/frontend',
     emptyOutDir: true,
     manifest: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+        },
+      },
+    },
   },
   server: {
     proxy: {
       '/api': {
-        target: 'http://192.168.190.130:8000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
-        headers: { 'Host': 'demo.localhost' }
-      }
-    }
-  }
+        headers: { 'Host': 'demo.localhost' },
+      },
+    },
+  },
 }))
