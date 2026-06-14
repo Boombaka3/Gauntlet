@@ -304,3 +304,83 @@ Default model: `llama-3.3-70b-instruct`. Medical alternative: `medgemma-27b-it`.
 Switch via `NAVIGATOR_MODEL` env var — no code changes required.
 
 manage.py check: 0 issues. Committed and pushed to evidencetrace.
+
+---
+
+## EvidenceLens pull — 2026-06-14
+
+Cloned EvidenceLens research prototype, extracted artifacts, deleted clone.
+
+- `evidencelens_src/` (gitignored): `run_conflict_audit.py`, `run_evidence_audit.py`,
+  `run_answer_generation.py`, `normalize_scifact.py`, `normalize_pubmedqa.py`,
+  `normalize_qasper.py`, `conflict_audit_prompt.txt`, `evidence_audit_prompt.txt`
+- `scripts/test_data/`: `benchmark_records.jsonl` (4960 records, SciFact + PubMedQA + QASPER),
+  `conflict_pairs_ground_truth.jsonl` (5 manual biomedical conflict pairs),
+  `evidence_audit_outputs.jsonl`, `answer_generation_outputs.jsonl`, `__init__.py`
+- `docs/screenshots/`: `error_type_counts.png`, `hallucination_risk_by_dataset.png`,
+  `confidence_vs_risk_heatmap.png`, `support_label_distribution.png`
+- `.gitignore`: added `evidencelens_src/` entry
+- EvidenceLens uses Claude haiku-4-5 (now ported to NaviGator); 3 datasets; 10-type error taxonomy
+
+Verification: records=4960, conflict_pairs=5, PASS. Clone removed from C:\Temp\EvidenceLens.
+
+---
+
+## EvidenceLens integration — 2026-06-14
+
+Ported conflict audit + faithfulness audit logic from EvidenceLens into EvidenceTrace Django backend.
+
+- `apps/evidence/utils/dataset_loader.py` (new): `load_benchmark_records()`,
+  `load_conflict_pairs()`, `load_evidence_audit_outputs()`, dataset-filtered getters,
+  `get_conflict_text_pairs()` — joins `document_a.sentences` + `document_b.sentences`
+- `apps/evidence/models.py`: added `error_types = JSONField(default=list)` to `ConflictPair`;
+  help_text lists all 10 EvidenceLens error taxonomy terms
+- `apps/evidence/prompts/conflict_judge.txt`: added `error_types` to JSON response schema
+- `apps/evidence/scoring/conflict_judge.py`: added `judge_conflict_text(text_a, text_b)` —
+  ORM-free function for benchmark use; uses `OpenAICompatAdapter` via `_get_adapter()`
+- `apps/evidence/scoring/faithfulness.py` (new): `score_faithfulness(claim_text, source_sentence)` —
+  faithfulness audit via NaviGator; returns `{"faithful": bool, "faithfulness_score": float,
+  "error_types": list[str], "reasoning": str}`; default dict on adapter error
+- `apps/evidence/scoring/reward_voting.py`: uses `score_faithfulness` for both claims;
+  `final_confidence = 0.7 * consistency + 0.3 * faithfulness`; error_types merged from both
+- `apps/evidence/migrations/0003_conflictpair_error_types.py`: auto-generated; applied
+- `scripts/benchmark.py` (new): CLI `--limit`, `--dataset`, `--out`; uses `judge_conflict_text()`
+  + dataset_loader; reports verdict accuracy, per-dataset breakdown, confusion matrix,
+  error-type Jaccard overlap; requires `OPENAI_API_KEY` (NaviGator)
+- `scripts/smoke_test.py`: added `create_minimal_pdf()` alias + `get_test_paper_texts()`
+  helper (reads from `conflict_pairs_ground_truth.jsonl`, falls back to synthetic text)
+
+manage.py check: 0 issues. migrate_schemas --shared: applied 0003. Committed.
+
+---
+
+## Frontend polish (Prompt 3) — 2026-06-14
+
+Linear design system applied; all pages rebuilt as EvidenceTrace domain-specific views.
+
+- `frontend/tailwind.config.js`: `gauntlet.*` tokens remapped to Linear values
+  (`#010102` canvas, `#5e6ad2` lavender, `#27a644` success); `borderRadius` scale added
+- `frontend/src/components/Sidebar.jsx`: "EVIDENCE" brand (font-mono), "Claim Conflict
+  Detection" subtitle, nav: Jobs / New Analysis / History; Linear active state
+- `frontend/src/components/StatusBadge.jsx`: pill shape (`rounded-[9999px]`); PENDING → neutral
+- `frontend/src/components/ConflictBadge.jsx` (new): semantic per-verdict colors
+  (CONTRADICTS red, SUPPORTS green, PARTIAL amber, NEI gray)
+- `frontend/src/components/ConfidenceBar.jsx` (new): score bar + n_samples label +
+  same threshold colors as ScoreBar
+- `frontend/src/components/ApiStatus.jsx`: shows `{NAVIGATOR_MODEL} · HiPerGator` when online
+- `frontend/src/api/client.js`: 9 EvidenceTrace endpoints + `X-API-Key` header +
+  `uploadPaper()` multipart (field: `pdf_file`)
+- `frontend/src/data/mockData.js`: EvidenceTrace domain mock data
+  (MOCK_JOBS, MOCK_PAPERS, MOCK_CONFLICTS, MOCK_MODELS)
+- `frontend/.env.local`: added `VITE_NAVIGATOR_MODEL` + `VITE_NAVIGATOR_URL`
+- Pages (6, all with loading/error/mock states via `useApi`, no raw `fetch()`):
+  - `Jobs.jsx`: job list + inline create form
+  - `Papers.jsx`: PDF upload + dispatch button
+  - `NewJob.jsx`: radio-card n_samples selector (1/3/5)
+  - `JobStatus.jsx`: polls every 5s, stops on DONE/FAILED
+  - `Conflicts.jsx`: 4 stat cards + table with ConflictBadge/SeverityDots/ConfidenceBar/error pills + expandable rows
+  - `JobList.jsx`: history view
+- `DESIGN.md`: Linear design system reference (gauntlet token values + rationale)
+- `scripts/smoke_test.py`: `create_minimal_pdf()` + `get_test_paper_texts()` helpers
+
+npm run build: 23 modules changed, 1593 insertions, 0 errors.
