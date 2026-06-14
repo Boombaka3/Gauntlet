@@ -273,3 +273,34 @@ Claude → Claim objects), build_conflict_graph (pairwise conflict detection
 + Level 1 RL consistency voting), dispatch (group+chord fan-out).
 Prompt files: claim_extractor.txt + conflict_judge.txt. Admin registered.
 Smoke test updated for EvidenceTrace pipeline.
+
+---
+
+## NaviGator Toolkit integration — 2026-06-13
+
+Replaced all direct Anthropic Claude API calls with the UF NaviGator Toolkit
+(OpenAI-compatible API at https://api.ai.it.ufl.edu/v1). All models run locally
+on HiPerGator — no external API costs.
+
+- `apps/evidence/adapters/openai.py`: new `OpenAICompatAdapter` class; reads
+  `OPENAI_COMPAT_BASE_URL`, `OPENAI_API_KEY`, `NAVIGATOR_MODEL` env vars;
+  uses `openai.OpenAI(base_url=...)` client; retry on RateLimitError; returns `AdapterResult`
+- `scoring/conflict_judge.py`: removed `import anthropic`; `_call_claude()` replaced by
+  `_call_judge()` via `_get_adapter()`; fallback returns `{}` on adapter error
+- `scoring/faithfulness.py`: removed `import anthropic`; inline `OpenAICompatAdapter` call,
+  `max_tokens=256`; explicit error dict returned on `result.error`
+- `tasks/extract_claims.py`: removed `import anthropic`; adapter instantiated once per task
+  before section loop; `result.error` logged and section skipped via `continue`
+- `scripts/test_navigator.py`: new connection test — sends minimal conflict prompt,
+  verifies JSON verdict returned; exit 1 if key missing or response unparseable
+- `scripts/smoke_test.py`: added `dotenv.load_dotenv()`; `ANTHROPIC_KEY` → `NAVIGATOR_KEY`
+  checking `OPENAI_API_KEY`; updated warning message to mention NaviGator
+- `scripts/benchmark.py`: `ANTHROPIC_API_KEY` guard replaced with `OPENAI_API_KEY`
+  guard; error message directs user to set `OPENAI_COMPAT_BASE_URL` and NaviGator key
+- `.env.example`: `OPENAI_COMPAT_BASE_URL=https://api.ai.it.ufl.edu/v1`,
+  `OPENAI_API_KEY=<your-navigator-api-key>`, `NAVIGATOR_MODEL=llama-3.3-70b-instruct`
+
+Default model: `llama-3.3-70b-instruct`. Medical alternative: `medgemma-27b-it`.
+Switch via `NAVIGATOR_MODEL` env var — no code changes required.
+
+manage.py check: 0 issues. Committed and pushed to evidencetrace.
