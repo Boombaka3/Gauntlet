@@ -84,20 +84,56 @@ def make_test_pdf(text: str) -> bytes:
     return body + xref
 
 
+def create_minimal_pdf(text: str) -> bytes:
+    """Alias for make_test_pdf — builds a valid PDF from plain text."""
+    return make_test_pdf(text)
+
+
+def get_test_paper_texts() -> tuple[str, str]:
+    """
+    Load first conflict pair texts from EvidenceLens ground truth.
+    Falls back to synthetic text if file not found.
+    """
+    import json
+    conflict_path = TEST_DATA / "conflict_pairs_ground_truth.jsonl"
+    if conflict_path.exists():
+        with open(conflict_path, encoding="utf-8") as f:
+            pairs = [json.loads(l) for l in f if l.strip()]
+        if pairs:
+            pair = pairs[0]
+            doc_a = pair.get("document_a") or {}
+            doc_b = pair.get("document_b") or {}
+            text_a = (
+                " ".join(doc_a.get("sentences", []))
+                or doc_a.get("abstract", "")
+                or pair.get("claim_a", "")
+                or "Results: Drug X reduces tumor size by 40% in mouse models."
+            )
+            text_b = (
+                " ".join(doc_b.get("sentences", []))
+                or doc_b.get("abstract", "")
+                or pair.get("claim_b", "")
+                or "Results: Drug X shows no significant effect in clinical trials."
+            )
+            return str(text_a)[:1000], str(text_b)[:1000]
+    return (
+        "Results: Drug X significantly reduces tumor size in mouse models "
+        "with a 40% reduction observed at 10mg/kg dose after 4 weeks.",
+        "Results: Drug X showed no statistically significant effect on "
+        "tumor size in Phase 2 clinical trials across 200 patients.",
+    )
+
+
 def _load_paper(filename: str) -> bytes:
     path = TEST_DATA / filename
     if path.exists():
         return path.read_bytes()
-    # Fallback: generate inline
+    text_a, text_b = get_test_paper_texts()
     texts = {
-        "synthetic_paper_a.pdf": (
-            "Results: Drug X reduces tumor size by 40 percent in mouse models."
-        ),
-        "synthetic_paper_b.pdf": (
-            "Results: Drug X shows no significant effect on tumor size in clinical trials."
-        ),
+        "synthetic_paper_a.pdf": text_a,
+        "synthetic_paper_b.pdf": text_b,
     }
-    return make_test_pdf(texts.get(filename, f"Synthetic paper: {filename}"))
+    return create_minimal_pdf(texts.get(filename, f"Synthetic paper: {filename}"))
 
 
 def main() -> None:

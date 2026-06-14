@@ -1,10 +1,9 @@
 // frontend/src/components/MockBanner.jsx
 export function MockBanner() {
   return (
-    <div className="w-full bg-gauntlet-warning/10 border-b border-gauntlet-warning/20
-                    px-6 py-2 flex items-center gap-2">
-      <span className="w-1.5 h-1.5 rounded-full bg-gauntlet-warning animate-pulse flex-shrink-0" />
-      <span className="text-gauntlet-warning text-xs font-mono tracking-tight">
+    <div className="w-full bg-[#141516] border-b border-[#34343a] px-6 py-2 flex items-center gap-2">
+      <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-pulse flex-shrink-0" />
+      <span className="text-[#d0d6e0] text-xs font-mono">
         DEMO MODE — API unavailable. Showing sample data.
       </span>
     </div>

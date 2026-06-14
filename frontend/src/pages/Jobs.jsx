@@ -1,0 +1,156 @@
+// frontend/src/pages/Jobs.jsx
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useApi } from '../hooks/useApi.js'
+import { listJobs, createJob } from '../api/client.js'
+import { MOCK_JOBS } from '../data/mockData.js'
+import { MockBanner } from '../components/MockBanner.jsx'
+import { LoadingState } from '../components/LoadingState.jsx'
+import { ErrorState } from '../components/ErrorState.jsx'
+import StatusBadge from '../components/StatusBadge.jsx'
+
+function fmtDate(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+export default function Jobs() {
+  const { data: jobs, loading, error, isMock, refetch } = useApi(listJobs, MOCK_JOBS)
+  const [showCreate, setShowCreate] = useState(false)
+  const [nSamples, setNSamples] = useState(3)
+  const [creating, setCreating] = useState(false)
+  const navigate = useNavigate()
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    setCreating(true)
+    try {
+      const job = await createJob({ n_samples: nSamples })
+      navigate(`/jobs/${job.id}`)
+    } catch {
+      refetch()
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#010102]">
+      {isMock && <MockBanner />}
+
+      <div className="px-8 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-semibold text-[#f7f8f8] tracking-tight">
+            Analysis Jobs
+          </h1>
+          <button
+            onClick={() => setShowCreate(v => !v)}
+            className="px-3 py-2 bg-[#5e6ad2] hover:bg-[#828fff] text-white
+                       text-sm rounded-[8px] transition-colors"
+          >
+            + New Analysis
+          </button>
+        </div>
+
+        {/* Inline create form */}
+        {showCreate && (
+          <form onSubmit={handleCreate}
+            className="bg-[#0f1011] border border-[#23252a] rounded-[12px] p-4 mb-6">
+            <div className="mb-3">
+              <label className="block text-[#8a8f98] text-xs uppercase tracking-wider mb-1">
+                Consistency samples
+              </label>
+              <input
+                type="number"
+                min={1} max={10}
+                value={nSamples}
+                onChange={e => setNSamples(parseInt(e.target.value) || 1)}
+                className="bg-[#141516] border border-[#23252a] rounded-[8px] px-3 py-2
+                           text-[#f7f8f8] text-sm focus:outline-none focus:border-[#5e6ad2] w-24"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" disabled={creating}
+                className="px-3 py-1.5 bg-[#5e6ad2] hover:bg-[#828fff] text-white
+                           text-xs rounded-[8px] transition-colors disabled:opacity-50">
+                {creating ? 'Creating…' : 'Create'}
+              </button>
+              <button type="button" onClick={() => setShowCreate(false)}
+                className="px-3 py-1.5 text-[#f7f8f8] text-xs rounded-[8px]
+                           hover:bg-[#141516] transition-colors">
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {loading && <LoadingState rows={4} />}
+        {error && !isMock && <ErrorState message={error} onRetry={refetch} />}
+
+        {jobs && jobs.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-24 gap-2">
+            <p className="text-[#8a8f98] text-sm">No analysis jobs yet.</p>
+            <p className="text-[#62666d] text-xs mt-1">
+              Upload research papers to detect conflicting claims.
+            </p>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="mt-4 px-4 py-2 bg-[#5e6ad2] hover:bg-[#828fff] text-white
+                         text-sm rounded-[8px] transition-colors"
+            >
+              + Start first analysis
+            </button>
+          </div>
+        )}
+
+        {jobs && jobs.length > 0 && (
+          <table className="w-full">
+            <thead>
+              <tr className="bg-[#0f1011] border-y border-[#23252a]">
+                {['#', 'Status', 'Papers', 'Claims', 'Conflicts', 'Created', 'Actions'].map(h => (
+                  <th key={h}
+                    className="text-[#8a8f98] text-[11px] font-medium uppercase tracking-wider
+                               px-4 py-3 text-left">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map(job => (
+                <tr key={job.id}
+                  className="border-b border-[#23252a] hover:bg-[#0f1011] transition-colors">
+                  <td className="px-4 py-3 text-[#62666d] font-mono text-xs">{job.id}</td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={job.status} size="sm" />
+                  </td>
+                  <td className="px-4 py-3 text-[#d0d6e0] font-mono text-xs">
+                    {job.papers_count ?? 0}
+                  </td>
+                  <td className="px-4 py-3 text-[#d0d6e0] font-mono text-xs">
+                    {job.claims_count ?? 0}
+                  </td>
+                  <td className="px-4 py-3 text-[#d0d6e0] font-mono text-xs">
+                    {job.conflicts_count ?? 0}
+                  </td>
+                  <td className="px-4 py-3 text-[#8a8f98] text-xs">
+                    {fmtDate(job.created_at)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link
+                      to={`/jobs/${job.id}`}
+                      className="text-[#5e6ad2] hover:text-[#828fff] text-xs transition-colors"
+                    >
+                      Papers →
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}

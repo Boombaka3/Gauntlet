@@ -5,7 +5,23 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Linear design tokens — exact values from DESIGN.md
+        gauntlet: {
+          bg:           '#010102',
+          surface:      '#0f1011',
+          surface2:     '#141516',
+          surface3:     '#18191a',
+          border:       '#23252a',
+          borderStrong: '#34343a',
+          accent:       '#5e6ad2',
+          accentHover:  '#828fff',
+          success:      '#27a644',
+          warning:      '#F59E0B',
+          danger:       '#EF4444',
+          text:         '#f7f8f8',
+          muted:        '#d0d6e0',
+          subtle:       '#8a8f98',
+          tertiary:     '#62666d',
+        },
         linear: {
           canvas:              '#010102',
           surface1:            '#0f1011',
@@ -24,22 +40,18 @@ export default {
           'ink-tertiary':      '#62666d',
           success:             '#27a644',
         },
-        // gauntlet.* remapped to Linear values — existing classNames get Linear colors
-        gauntlet: {
-          bg:      '#010102',  // linear.canvas
-          surface: '#0f1011',  // linear.surface1
-          border:  '#23252a',  // linear.hairline
-          accent:  '#5e6ad2',  // linear.accent
-          success: '#27a644',  // linear.success
-          warning: '#F59E0B',
-          danger:  '#EF4444',
-          muted:   '#8a8f98',  // linear.ink-subtle
-          text:    '#f7f8f8',  // linear.ink
-        },
       },
       fontFamily: {
         sans: ['Inter', 'SF Pro Display', '-apple-system', 'system-ui', 'Segoe UI', 'Roboto', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SF Mono', 'Menlo', 'monospace'],
+      },
+      borderRadius: {
+        'linear-xs':   '4px',
+        'linear-sm':   '6px',
+        'linear-md':   '8px',
+        'linear-lg':   '12px',
+        'linear-xl':   '16px',
+        'linear-pill': '9999px',
       },
     },
   },

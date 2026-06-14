@@ -1,37 +1,48 @@
 // frontend/src/api/client.js
-const BASE = import.meta.env.VITE_API_BASE || '/api'
+const API_KEY = import.meta.env.VITE_API_KEY || ''
+const BASE    = import.meta.env.VITE_API_BASE || '/api'
 
-async function request(path, options = {}) {
+function getHeaders() {
+  const h = { 'Content-Type': 'application/json' }
+  if (API_KEY) h['X-API-Key'] = API_KEY
+  return h
+}
+
+async function request(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
+    method,
+    headers: getHeaders(),
+    body: body ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {
-    let msg = `HTTP ${res.status}`
-    try {
-      const body = await res.json()
-      msg = body.detail || body.message || JSON.stringify(body)
-    } catch (_) {}
-    throw new Error(msg)
+    const text = await res.text()
+    throw new Error(`${res.status}: ${text}`)
   }
   if (res.status === 204) return null
   return res.json()
 }
 
-export const listSuites = () => request('/evals/suites/')
-export const getSuite = (id) => request(`/evals/suites/${id}/`)
-export const createSuite = (data) => request('/evals/suites/', { method: 'POST', body: JSON.stringify(data) })
-export const patchSuite = (id, data) => request(`/evals/suites/${id}/`, { method: 'PATCH', body: JSON.stringify(data) })
+export const listJobs      = ()     => request('GET',  '/evidence/jobs/')
+export const createJob     = (data) => request('POST', '/evidence/jobs/', data)
+export const getJob        = (id)   => request('GET',  `/evidence/jobs/${id}/`)
+export const dispatchJob   = (id)   => request('POST', `/evidence/jobs/${id}/dispatch/`)
+export const listPapers    = (id)   => request('GET',  `/evidence/jobs/${id}/papers/`)
+export const listClaims    = (id)   => request('GET',  `/evidence/jobs/${id}/claims/`)
+export const listConflicts = (id)   => request('GET',  `/evidence/jobs/${id}/conflicts/`)
+export const getReport     = (id)   => request('GET',  `/evidence/jobs/${id}/report/`)
+export const getHealth     = ()     => request('GET',  '/health/')
 
-export const listCases = (suiteId) => request(`/evals/suites/${suiteId}/cases/`)
-export const createCase = (suiteId, data) => request(`/evals/suites/${suiteId}/cases/`, { method: 'POST', body: JSON.stringify(data) })
-export const deleteCase = (caseId) => request(`/evals/cases/${caseId}/`, { method: 'DELETE' })
-
-export const createRun = (data) => request('/evals/runs/', { method: 'POST', body: JSON.stringify(data) })
-export const getRun = (id) => request(`/evals/runs/${id}/`)
-export const getRunResults = (id) => request(`/evals/runs/${id}/results/`)
-export const getRegression = (id) => request(`/evals/runs/${id}/regression/`)
-export const pinBaseline = (id) => request(`/evals/runs/${id}/pin-baseline/`, { method: 'POST' })
-
-export const listModels = () => request('/evals/models/')
-export const getHealth = () => request('/health/')
+export async function uploadPaper(jobId, file, title = '') {
+  const form = new FormData()
+  form.append('pdf_file', file)
+  if (title) form.append('title', title)
+  const h = {}
+  if (API_KEY) h['X-API-Key'] = API_KEY
+  const res = await fetch(`${BASE}/evidence/jobs/${jobId}/papers/`, {
+    method: 'POST',
+    headers: h,
+    body: form,
+  })
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`)
+  return res.json()
+}
