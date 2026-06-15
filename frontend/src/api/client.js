@@ -53,3 +53,18 @@ export async function uploadPaper(jobId, file, title = '') {
   if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`)
   return res.json()
 }
+
+export async function deletePaper(paperId) {
+  const h = {}
+  const key = getApiKey()
+  if (key) h['X-API-Key'] = key
+  const res = await fetch(`${BASE}/evidence/papers/${paperId}/`, {
+    method: 'DELETE',
+    headers: h,
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`${res.status}: ${text}`)
+  }
+  return true
+}

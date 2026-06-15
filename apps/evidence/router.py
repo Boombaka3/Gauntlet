@@ -150,6 +150,16 @@ def list_papers(request, job_id: int):
     return [_paper_out(p) for p in job.papers.all()]
 
 
+@router.delete("/papers/{paper_id}/", response={204: None}, auth=api_key_auth)
+def delete_paper(request, paper_id: int):
+    from django.shortcuts import get_object_or_404
+    paper = get_object_or_404(Paper, id=paper_id)
+    if paper.job.status != AnalysisJob.Status.PENDING:
+        raise HttpError(409, "Cannot delete paper after analysis has started")
+    paper.delete()
+    return 204, None
+
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 @router.post("/jobs/{job_id}/dispatch/", auth=api_key_auth)

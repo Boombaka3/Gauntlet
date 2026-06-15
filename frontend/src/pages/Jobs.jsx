@@ -85,6 +85,30 @@ export default function Jobs() {
           </form>
         )}
 
+        {/* Stats row */}
+        {jobs && jobs.length > 0 && !isMock && (() => {
+          const totalJobs      = jobs.length
+          const doneJobs       = jobs.filter(j => j.status === 'DONE').length
+          const totalConflicts = jobs.reduce((s, j) => s + (j.conflicts_count || 0), 0)
+          const totalClaims    = jobs.reduce((s, j) => s + (j.claims_count || 0), 0)
+          return (
+            <div className="grid grid-cols-4 gap-3 mb-6">
+              {[
+                { label: 'Analyses',          value: totalJobs      },
+                { label: 'Completed',         value: doneJobs       },
+                { label: 'Claims extracted',  value: totalClaims    },
+                { label: 'Conflicts detected',value: totalConflicts },
+              ].map(s => (
+                <div key={s.label}
+                  className="bg-[#0f1011] border border-[#23252a] rounded-[8px] p-4">
+                  <div className="text-[#f7f8f8] text-2xl font-semibold font-mono">{s.value}</div>
+                  <div className="text-[#8a8f98] text-xs uppercase tracking-wider mt-1">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+
         {loading && <LoadingState rows={4} />}
         {error && !isMock && <ErrorState message={error} onRetry={refetch} />}
 
