@@ -1,5 +1,6 @@
 // frontend/src/components/Sidebar.jsx
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { clearStoredKey } from '../hooks/useAuth.js'
 
 const GridIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -27,12 +28,19 @@ const ListIcon = () => (
 )
 
 const NAV = [
-  { to: '/jobs',      label: 'Jobs',          Icon: GridIcon      },
-  { to: '/jobs/new',  label: 'New Analysis',  Icon: PlusCircleIcon },
-  { to: '/jobs/list', label: 'History',        Icon: ListIcon      },
+  { to: '/jobs',      label: 'Jobs',         Icon: GridIcon       },
+  { to: '/jobs/new',  label: 'New Analysis', Icon: PlusCircleIcon },
+  { to: '/jobs/list', label: 'History',      Icon: ListIcon       },
 ]
 
 export default function Sidebar() {
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    clearStoredKey()
+    navigate('/login')
+  }
+
   return (
     <aside className="w-60 flex-shrink-0 fixed top-0 left-0 h-screen
                       bg-[#0f1011] border-r border-[#23252a]
@@ -75,17 +83,32 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      {/* About blurb */}
+      <div className="px-3 py-3 border-t border-[#23252a] mt-4">
+        <p className="text-[#62666d] text-[10px] font-mono leading-relaxed px-3">
+          Biomedical claim conflict detection.
+          Powered by llama-3.3-70b on UF HiPerGator.
+        </p>
+      </div>
+
       {/* Footer */}
       <div className="px-3 py-4 border-t border-[#23252a] space-y-1">
         <div className="text-[#62666d] text-xs font-mono px-3">v1.0.0</div>
         <a
-          href="https://github.com/Boombaka3/EvidenceLens"
+          href="https://github.com/Boombaka3/Gauntlet"
           target="_blank"
           rel="noreferrer"
           className="text-[#62666d] text-xs hover:text-[#5e6ad2] transition-colors px-3 block"
         >
           github ↗
         </a>
+        <button
+          onClick={handleLogout}
+          className="text-[#62666d] hover:text-[#EF4444] text-xs font-mono
+                     px-3 py-1 transition-colors block"
+        >
+          Sign out
+        </button>
       </div>
     </aside>
   )

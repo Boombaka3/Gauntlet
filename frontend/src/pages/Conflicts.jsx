@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useApi } from '../hooks/useApi.js'
-import { listConflicts } from '../api/client.js'
+import { listConflicts, getJob } from '../api/client.js'
 import { MOCK_CONFLICTS } from '../data/mockData.js'
 import { MockBanner } from '../components/MockBanner.jsx'
 import { LoadingState } from '../components/LoadingState.jsx'
@@ -33,9 +33,12 @@ export default function Conflicts() {
   const { data: conflicts, loading, error, isMock, refetch } = useApi(
     () => listConflicts(id), MOCK_CONFLICTS, [id]
   )
+  const { data: job } = useApi(() => getJob(id), null, [id])
   const [expandedId, setExpandedId] = useState(null)
 
+  const nSamples = job?.n_samples ?? '?'
   const contradictions = conflicts?.filter(c => c.verdict === 'CONTRADICTS').length ?? 0
+  const supports = conflicts?.filter(c => c.verdict === 'SUPPORTS').length ?? 0
   const avgConf = conflicts?.length
     ? (conflicts.reduce((s, c) => s + (c.final_confidence ?? 0), 0) / conflicts.length).toFixed(2)
     : '—'
@@ -52,9 +55,24 @@ export default function Conflicts() {
           ← Job #{id}
         </Link>
 
-        <h1 className="text-xl font-semibold text-[#f7f8f8] mb-6 tracking-tight">
+        <h1 className="text-xl font-semibold text-[#f7f8f8] mb-3 tracking-tight">
           Conflict Report
         </h1>
+
+        <p className="text-[#8a8f98] text-sm mb-6 max-w-2xl">
+          Each row shows a conflict detected between claims from different papers.
+          Confidence combines consistency across {nSamples} independent judgments
+          and faithfulness of each claim to its source sentence.
+        </p>
+
+        {/* Summary stat row */}
+        {conflicts && conflicts.length > 0 && (
+          <p className="text-[#d0d6e0] text-sm font-mono border-b border-[#23252a] pb-3 mb-4">
+            {conflicts.length} pair{conflicts.length !== 1 ? 's' : ''} analyzed —{' '}
+            {contradictions} contradiction{contradictions !== 1 ? 's' : ''},{' '}
+            {supports} agreement{supports !== 1 ? 's' : ''}
+          </p>
+        )}
 
         {/* Summary cards */}
         {conflicts && (

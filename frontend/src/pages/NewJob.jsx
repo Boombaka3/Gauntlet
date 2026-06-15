@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import { createJob } from '../api/client.js'
 
 const SAMPLE_OPTIONS = [
-  { value: 1, label: '1 sample',   desc: 'Fast, single run' },
-  { value: 3, label: '3 samples',  desc: 'Balanced (recommended)' },
-  { value: 5, label: '5 samples',  desc: 'High confidence, slower' },
+  { value: 1, label: 'Quick',    desc: '1 run per claim pair' },
+  { value: 3, label: 'Balanced', desc: '3 runs — recommended' },
+  { value: 5, label: 'Thorough', desc: '5 runs — highest confidence' },
 ]
 
 export default function NewJob() {
@@ -31,9 +31,15 @@ export default function NewJob() {
   return (
     <div className="min-h-screen bg-[#010102] flex items-start justify-center pt-20 px-4">
       <div className="w-full max-w-md">
-        <h1 className="text-xl font-semibold text-[#f7f8f8] mb-6 tracking-tight">
+        <h1 className="text-xl font-semibold text-[#f7f8f8] mb-2 tracking-tight">
           New Analysis
         </h1>
+
+        <p className="text-[#8a8f98] text-sm mb-6 max-w-md">
+          Upload 2 or more research PDFs. EvidenceTrace extracts structured claims
+          from each paper, compares them pairwise, and flags contradictions —
+          scored with an RL confidence measure.
+        </p>
 
         <form onSubmit={handleSubmit}
           className="bg-[#0f1011] border border-[#23252a] rounded-[12px] p-6">

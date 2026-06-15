@@ -88,18 +88,26 @@ export default function Jobs() {
         {loading && <LoadingState rows={4} />}
         {error && !isMock && <ErrorState message={error} onRetry={refetch} />}
 
-        {jobs && jobs.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 gap-2">
-            <p className="text-[#8a8f98] text-sm">No analysis jobs yet.</p>
-            <p className="text-[#62666d] text-xs mt-1">
-              Upload research papers to detect conflicting claims.
+        {jobs && jobs.length === 0 && !loading && (
+          <div className="flex flex-col items-center justify-center py-32 gap-4">
+            <div className="w-12 h-12 rounded-[12px] bg-[#0f1011] border border-[#23252a]
+                            flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                   stroke="#5e6ad2" strokeWidth="1.5">
+                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586
+                         a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19
+                         a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <p className="text-[#f7f8f8] text-sm font-medium">No analyses yet</p>
+            <p className="text-[#8a8f98] text-xs text-center max-w-xs">
+              Upload research papers to automatically detect
+              contradictions across clinical trial publications.
             </p>
-            <button
-              onClick={() => setShowCreate(true)}
-              className="mt-4 px-4 py-2 bg-[#5e6ad2] hover:bg-[#828fff] text-white
-                         text-sm rounded-[8px] transition-colors"
-            >
-              + Start first analysis
+            <button onClick={() => navigate('/jobs/new')}
+              className="mt-2 bg-[#5e6ad2] hover:bg-[#828fff] text-white
+                         text-sm font-medium px-4 py-2 rounded-[8px] transition-colors">
+              Start first analysis
             </button>
           </div>
         )}

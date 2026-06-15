@@ -1,10 +1,16 @@
 // frontend/src/api/client.js
-const API_KEY = import.meta.env.VITE_API_KEY || ''
-const BASE    = import.meta.env.VITE_API_BASE || '/api'
+import { getStoredKey } from '../hooks/useAuth.js'
+
+const BASE = import.meta.env.VITE_API_BASE || '/api'
+
+function getApiKey() {
+  return getStoredKey()
+}
 
 function getHeaders() {
   const h = { 'Content-Type': 'application/json' }
-  if (API_KEY) h['X-API-Key'] = API_KEY
+  const key = getApiKey()
+  if (key) h['X-API-Key'] = key
   return h
 }
 
@@ -37,7 +43,8 @@ export async function uploadPaper(jobId, file, title = '') {
   form.append('pdf_file', file)
   if (title) form.append('title', title)
   const h = {}
-  if (API_KEY) h['X-API-Key'] = API_KEY
+  const key = getApiKey()
+  if (key) h['X-API-Key'] = key
   const res = await fetch(`${BASE}/evidence/jobs/${jobId}/papers/`, {
     method: 'POST',
     headers: h,
