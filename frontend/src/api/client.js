@@ -33,7 +33,8 @@ export const getHealth     = ()   => request('GET',  '/health/')
 
 // ── Write (requires API key) ──────────────────────────────────────────────────
 export const createJob   = (data) => request('POST', '/evidence/jobs/',              data, true)
-export const dispatchJob = (id)   => request('POST', `/evidence/jobs/${id}/dispatch/`, {}, true)
+export const dispatchJob     = (id) => request('POST', `/evidence/jobs/${id}/dispatch/`,      {}, true)
+export const dispatchJobSync = (id) => request('POST', `/evidence/jobs/${id}/dispatch-sync/`, {}, true)
 
 export async function uploadPaper(jobId, file, title = '') {
   const form = new FormData()

@@ -2,7 +2,7 @@
 import { useState, useRef, Fragment } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useApi } from '../hooks/useApi.js'
-import { listPapers, uploadPaper, dispatchJob, deletePaper, getJob } from '../api/client.js'
+import { listPapers, uploadPaper, dispatchJob, dispatchJobSync, deletePaper, getJob } from '../api/client.js'
 import { MOCK_PAPERS } from '../data/mockData.js'
 import { MockBanner } from '../components/MockBanner.jsx'
 import { LoadingState } from '../components/LoadingState.jsx'
@@ -112,11 +112,18 @@ export default function Papers() {
   async function handleDispatch() {
     setDispatching(true)
     try {
-      await dispatchJob(id)
+      // Try sync dispatch first (works on free tier, no Celery needed)
+      await dispatchJobSync(id)
       navigate(`/jobs/${id}/status`)
     } catch (err) {
-      alert(`Dispatch failed: ${err.message}`)
-      setDispatching(false)
+      if (err.message.includes('400')) {
+        // Too many papers for sync -- use async
+        await dispatchJob(id)
+        navigate(`/jobs/${id}/status`)
+      } else {
+        alert(`Dispatch failed: ${err.message}`)
+        setDispatching(false)
+      }
     }
   }
 

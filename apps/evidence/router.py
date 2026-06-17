@@ -180,6 +180,135 @@ def dispatch_job(request, job_id: int):
     return {"status": "dispatched", "job_id": job_id}
 
 
+@router.post("/jobs/{job_id}/dispatch-sync/", response={200: dict})
+def dispatch_sync(request, job_id: int):
+    """
+    Synchronous pipeline for demo/free-tier deployment.
+    Runs inline: extract claims -> build conflict graph -> score.
+    Limit: 2 papers max, 3 claims per paper max.
+    No Celery or Redis required.
+    """
+    from django.shortcuts import get_object_or_404
+    from apps.evidence.models import RewardScore
+    from apps.evidence.utils.pdf_parser import extract_sections, get_main_sections
+    from apps.evidence.scoring.reward_voting import compute_reward
+    from apps.evidence.adapters.openai import OpenAICompatAdapter
+    import os, json, re, logging as _logging
+    from pathlib import Path
+    from itertools import combinations
+
+    _logger = _logging.getLogger(__name__)
+    MAX_PAPERS = 2
+    MAX_CLAIMS_PER_PAPER = 3
+
+    job = get_object_or_404(AnalysisJob, id=job_id)
+    papers = list(job.papers.all())
+
+    if len(papers) > MAX_PAPERS:
+        raise HttpError(400, f"Sync dispatch limited to {MAX_PAPERS} papers. Use /dispatch/ for larger jobs.")
+
+    if job.status not in (AnalysisJob.Status.PENDING,):
+        raise HttpError(409, f"Job is already {job.status}")
+
+    job.status = AnalysisJob.Status.RUNNING
+    job.save(update_fields=["status"])
+
+    try:
+        model = os.environ.get("NAVIGATOR_MODEL", "llama-3.3-70b-versatile")
+        adapter = OpenAICompatAdapter(model_id=model)
+
+        EXTRACTOR_PROMPT = (
+            Path(__file__).parent / "prompts" / "claim_extractor.txt"
+        ).read_text()
+
+        s3 = _s3_client()
+
+        for paper in papers:
+            try:
+                obj = s3.get_object(
+                    Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                    Key=paper.s3_key,
+                )
+                pdf_bytes = obj["Body"].read()
+                sections = get_main_sections(extract_sections(pdf_bytes))
+            except Exception as e:
+                _logger.error(f"Failed to read paper {paper.id}: {e}")
+                sections = {}
+
+            claims_created = 0
+            for section_name, section_text in list(sections.items())[:2]:
+                if claims_created >= MAX_CLAIMS_PER_PAPER:
+                    break
+                if not section_text.strip():
+                    continue
+                prompt = EXTRACTOR_PROMPT.replace("{section_text}", section_text[:2000])
+                try:
+                    result = adapter.complete(
+                        system_prompt="You are a scientific claim extractor. Respond only with valid JSON.",
+                        user_prompt=prompt,
+                        max_tokens=512,
+                    )
+                    raw = result.output or ""
+                    raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
+                    raw = re.sub(r"```\s*$", "", raw, flags=re.MULTILINE).strip()
+                    data = json.loads(raw)
+                    for c in data.get("claims", [])[:MAX_CLAIMS_PER_PAPER]:
+                        if claims_created >= MAX_CLAIMS_PER_PAPER:
+                            break
+                        Claim.objects.create(
+                            paper=paper,
+                            text=c.get("text", ""),
+                            claim_type=c.get("type", "factual"),
+                            entities=c.get("entities", []),
+                            section=c.get("section", section_name),
+                            source_sentence=c.get("source_sentence", ""),
+                            confidence=c.get("confidence"),
+                        )
+                        claims_created += 1
+                except Exception as e:
+                    _logger.error(f"Claim extraction failed: {e}")
+
+        paper_ids = [p.id for p in papers]
+        all_claims = {
+            pid: list(Claim.objects.filter(paper_id=pid))
+            for pid in paper_ids
+        }
+
+        pairs_created = 0
+        for pid_a, pid_b in combinations(paper_ids, 2):
+            claims_a = all_claims.get(pid_a, [])
+            claims_b = all_claims.get(pid_b, [])
+            for ca in claims_a:
+                for cb in claims_b:
+                    try:
+                        conflict_pair, reward = compute_reward(
+                            ca, cb, n_samples=job.n_samples
+                        )
+                        conflict_pair.save()
+                        reward.conflict_pair = conflict_pair
+                        reward.save()
+                        pairs_created += 1
+                    except Exception as e:
+                        _logger.error(f"Conflict pair failed: {e}")
+
+        job.status = AnalysisJob.Status.DONE
+        job.save(update_fields=["status"])
+
+        return {
+            "job_id": job_id,
+            "status": "DONE",
+            "papers": len(papers),
+            "claims": sum(len(v) for v in all_claims.values()),
+            "conflicts": pairs_created,
+        }
+
+    except Exception as e:
+        _logger.error(f"Sync dispatch failed for job {job_id}: {e}")
+        job.status = AnalysisJob.Status.FAILED
+        job.save(update_fields=["status"])
+        raise HttpError(500, f"Pipeline failed: {str(e)}")
+
+
 # ── Claims & Conflicts ────────────────────────────────────────────────────────
 
 @router.get("/jobs/{job_id}/claims/", response=list[ClaimOut])
