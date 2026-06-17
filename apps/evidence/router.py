@@ -7,10 +7,11 @@ from ninja import File, Router
 from ninja.errors import HttpError
 from ninja.files import UploadedFile
 
-from apps.evidence.models import AnalysisJob, Claim, ConflictPair, Paper
+from apps.evidence.models import AnalysisJob, AnswerRecord, Claim, Paper, RewardScore
 from apps.evidence.schemas import (
+    AnswerRecordOut,
+    AskIn,
     ClaimOut,
-    ConflictPairOut,
     JobIn,
     JobOut,
     PaperOut,
@@ -42,68 +43,48 @@ def _get_or_404(model_class, pk: int):
 
 
 def _job_out(job: AnalysisJob) -> JobOut:
-    papers_count = job.papers.count()
-    claims_count = Claim.objects.filter(paper__job=job).count()
-    conflicts_count = ConflictPair.objects.filter(claim_a__paper__job=job).count()
+    paper_count = job.papers.count()
+    claim_count = Claim.objects.filter(paper__job=job).count()
+    answer_count = AnswerRecord.objects.filter(paper__job=job).count()
     return JobOut(
         id=job.id,
         status=job.status,
         n_samples=job.n_samples,
-        papers_count=papers_count,
-        claims_count=claims_count,
-        conflicts_count=conflicts_count,
-        started_at=job.started_at,
-        finished_at=job.finished_at,
-        created_at=job.created_at,
+        paper_count=paper_count,
+        claim_count=claim_count,
+        answer_count=answer_count,
+        started_at=job.started_at.isoformat() if job.started_at else None,
+        finished_at=job.finished_at.isoformat() if job.finished_at else None,
+        created_at=job.created_at.isoformat(),
     )
 
 
 def _paper_out(paper: Paper) -> PaperOut:
     return PaperOut(
         id=paper.id,
-        job_id=paper.job_id,
         title=paper.title,
-        abstract=paper.abstract,
-        s3_key=paper.s3_key,
-        claims_count=paper.claims.count(),
-        created_at=paper.created_at,
+        claim_count=paper.claims.count(),
+        answer_count=paper.answers.count(),
+        created_at=paper.created_at.isoformat(),
     )
 
 
-def _conflict_out(cp: ConflictPair) -> ConflictPairOut:
-    reward = None
-    consistency_score = None
-    final_confidence = None
-    r_obj = getattr(cp, "reward", None)
-    if r_obj is not None:
-        try:
-            reward = RewardScoreOut(
-                consistency_score=r_obj.consistency_score,
-                nli_score=r_obj.nli_score,
-                faithfulness_score=r_obj.faithfulness_score,
-                final_confidence=r_obj.final_confidence,
-                n_samples=r_obj.n_samples,
-            )
-            consistency_score = r_obj.consistency_score
-            final_confidence = r_obj.final_confidence
-        except Exception:
-            pass
-    return ConflictPairOut(
-        id=cp.id,
-        claim_a_id=cp.claim_a_id,
-        claim_b_id=cp.claim_b_id,
-        verdict=cp.verdict,
-        conflict_type=cp.conflict_type,
-        severity=cp.severity,
-        reasoning=cp.reasoning,
-        source_sentence_a=cp.source_sentence_a,
-        source_sentence_b=cp.source_sentence_b,
-        error_types=list(cp.error_types) if cp.error_types else [],
-        consistency_score=consistency_score,
-        final_confidence=final_confidence,
-        reward=reward,
-        created_at=cp.created_at,
-    )
+def _answer_out(ar: AnswerRecord) -> dict:
+    reward = getattr(ar, 'reward', None)
+    return {
+        "id": ar.id,
+        "question": ar.question,
+        "answer": ar.answer,
+        "gold_label": ar.gold_label,
+        "reasoning": ar.reasoning,
+        "source_sentence": ar.source_sentence,
+        "error_types": ar.error_types or [],
+        "final_confidence": reward.final_confidence if reward else None,
+        "consistency_score": reward.consistency_score if reward else None,
+        "faithfulness_score": reward.faithfulness_score if reward else None,
+        "paper_id": ar.paper_id,
+        "paper_title": ar.paper.title if ar.paper_id else "",
+    }
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
@@ -184,18 +165,17 @@ def dispatch_job(request, job_id: int):
 def dispatch_sync(request, job_id: int):
     """
     Synchronous pipeline for demo/free-tier deployment.
-    Runs inline: extract claims -> build conflict graph -> score.
+    Runs inline: extract claims -> answer questions per paper.
     Limit: 2 papers max, 3 claims per paper max.
     No Celery or Redis required.
     """
     from django.shortcuts import get_object_or_404
-    from apps.evidence.models import RewardScore
-    from apps.evidence.utils.pdf_parser import extract_sections, get_main_sections
     from apps.evidence.scoring.reward_voting import compute_reward
     from apps.evidence.adapters.openai import OpenAICompatAdapter
+    from apps.evidence.utils.pdf_parser import extract_sections, get_main_sections
+    from apps.evidence.tasks.answer_questions import _claim_to_question
     import os, json, re, logging as _logging
     from pathlib import Path
-    from itertools import combinations
 
     _logger = _logging.getLogger(__name__)
     MAX_PAPERS = 2
@@ -268,38 +248,35 @@ def dispatch_sync(request, job_id: int):
                 except Exception as e:
                     _logger.error(f"Claim extraction failed: {e}")
 
-        paper_ids = [p.id for p in papers]
-        all_claims = {
-            pid: list(Claim.objects.filter(paper_id=pid))
-            for pid in paper_ids
-        }
-
-        pairs_created = 0
-        for pid_a, pid_b in combinations(paper_ids, 2):
-            claims_a = all_claims.get(pid_a, [])
-            claims_b = all_claims.get(pid_b, [])
-            for ca in claims_a:
-                for cb in claims_b:
-                    try:
-                        conflict_pair, reward = compute_reward(
-                            ca, cb, n_samples=job.n_samples
-                        )
-                        conflict_pair.save()
-                        reward.conflict_pair = conflict_pair
-                        reward.save()
-                        pairs_created += 1
-                    except Exception as e:
-                        _logger.error(f"Conflict pair failed: {e}")
+        answers_created = 0
+        for paper in papers:
+            claims = list(paper.claims.all())
+            for claim in claims:
+                if not claim.text.strip():
+                    continue
+                try:
+                    question = _claim_to_question(claim.text)
+                    answer_record, reward = compute_reward(
+                        paper, question, n_samples=job.n_samples
+                    )
+                    answer_record.gold_label = ""
+                    answer_record.save()
+                    reward.answer_record = answer_record
+                    reward.save()
+                    answers_created += 1
+                except Exception as e:
+                    _logger.error(f"Answer question failed for claim {claim.id}: {e}")
 
         job.status = AnalysisJob.Status.DONE
         job.save(update_fields=["status"])
 
+        total_claims = sum(paper.claims.count() for paper in papers)
         return {
             "job_id": job_id,
             "status": "DONE",
             "papers": len(papers),
-            "claims": sum(len(v) for v in all_claims.values()),
-            "conflicts": pairs_created,
+            "claims": total_claims,
+            "answers": answers_created,
         }
 
     except Exception as e:
@@ -309,7 +286,7 @@ def dispatch_sync(request, job_id: int):
         raise HttpError(500, f"Pipeline failed: {str(e)}")
 
 
-# ── Claims & Conflicts ────────────────────────────────────────────────────────
+# ── Claims ────────────────────────────────────────────────────────────────────
 
 @router.get("/jobs/{job_id}/claims/", response=list[ClaimOut])
 def list_claims(request, job_id: int):
@@ -321,49 +298,83 @@ def list_claims(request, job_id: int):
             paper_id=c.paper_id,
             text=c.text,
             claim_type=c.claim_type,
-            entities=c.entities,
             section=c.section,
-            source_sentence=c.source_sentence,
             confidence=c.confidence,
-            created_at=c.created_at,
         )
         for c in claims
     ]
 
 
-@router.get("/jobs/{job_id}/conflicts/", response=list[ConflictPairOut])
-def list_conflicts(request, job_id: int):
+# ── Answers ───────────────────────────────────────────────────────────────────
+
+@router.get("/jobs/{job_id}/answers/", response=list[AnswerRecordOut])
+def list_answers(request, job_id: int):
     _get_or_404(AnalysisJob, job_id)
-    conflicts = (
-        ConflictPair.objects
-        .filter(claim_a__paper__job_id=job_id)
-        .select_related("claim_a__paper", "claim_b__paper", "reward")
+    answers = (
+        AnswerRecord.objects
+        .filter(paper__job_id=job_id)
+        .select_related("paper", "reward")
         .order_by("created_at")
     )
-    return [_conflict_out(cp) for cp in conflicts]
+    return [AnswerRecordOut(**_answer_out(ar)) for ar in answers]
 
+
+@router.post("/jobs/{job_id}/ask/", response=list[AnswerRecordOut], auth=api_key_auth)
+def ask_question(request, job_id: int, payload: AskIn):
+    from apps.evidence.scoring.reward_voting import compute_reward
+
+    job = _get_or_404(AnalysisJob, job_id)
+    question = payload.question.strip()
+    if not question:
+        raise HttpError(400, "question is required")
+
+    papers = list(job.papers.all())
+    results = []
+    for paper in papers:
+        try:
+            answer_record, reward = compute_reward(
+                paper, question, n_samples=job.n_samples
+            )
+            answer_record.gold_label = ""
+            answer_record.save()
+            reward.answer_record = answer_record
+            reward.save()
+            ar = AnswerRecord.objects.select_related("paper", "reward").get(
+                pk=answer_record.pk
+            )
+            results.append(AnswerRecordOut(**_answer_out(ar)))
+        except Exception as e:
+            logger.error(f"ask_question failed for paper {paper.id}: {e}")
+
+    return results
+
+
+# ── Report ────────────────────────────────────────────────────────────────────
 
 @router.get("/jobs/{job_id}/report/", response=ReportOut)
 def get_report(request, job_id: int):
     job = _get_or_404(AnalysisJob, job_id)
-    papers = list(job.papers.all())
-    conflicts = list(
-        ConflictPair.objects
-        .filter(claim_a__paper__job_id=job_id)
-        .select_related("claim_a__paper", "claim_b__paper", "reward")
-        .order_by("created_at")
-    )
+    total_papers = job.papers.count()
     total_claims = Claim.objects.filter(paper__job=job).count()
+    total_answers = AnswerRecord.objects.filter(paper__job=job).count()
+    yes_count   = AnswerRecord.objects.filter(paper__job=job, answer='yes').count()
+    no_count    = AnswerRecord.objects.filter(paper__job=job, answer='no').count()
+    maybe_count = AnswerRecord.objects.filter(paper__job=job, answer='maybe').count()
+
+    reward_scores = RewardScore.objects.filter(
+        answer_record__paper__job=job
+    ).values_list("final_confidence", flat=True)
+    valid_scores = [s for s in reward_scores if s is not None]
+    avg_confidence = sum(valid_scores) / len(valid_scores) if valid_scores else None
 
     return ReportOut(
         job_id=job.id,
         status=job.status,
-        papers=[_paper_out(p) for p in papers],
+        total_papers=total_papers,
         total_claims=total_claims,
-        total_conflicts=len(conflicts),
-        contradictions=sum(1 for c in conflicts if c.verdict == ConflictPair.Verdict.CONTRADICTS),
-        supports=sum(1 for c in conflicts if c.verdict == ConflictPair.Verdict.SUPPORTS),
-        partial=sum(1 for c in conflicts if c.verdict == ConflictPair.Verdict.PARTIAL),
-        nei=sum(1 for c in conflicts if c.verdict == ConflictPair.Verdict.NEI),
-        conflicts=[_conflict_out(cp) for cp in conflicts],
+        total_answers=total_answers,
+        yes_count=yes_count,
+        no_count=no_count,
+        maybe_count=maybe_count,
+        avg_confidence=avg_confidence,
     )

@@ -73,9 +73,9 @@ def test_get_job(job, api_key):
         data = res.json()
         assert data["id"] == job.id
         assert data["status"] == "PENDING"
-        assert "papers_count" in data
-        assert "claims_count" in data
-        assert "conflicts_count" in data
+        assert "paper_count" in data
+        assert "claim_count" in data
+        assert "answer_count" in data
 
 
 def test_get_job_404(api_key):
@@ -128,31 +128,25 @@ def test_list_claims_with_data(job, claim_a, claim_b, api_key):
         assert "Drug X reduces tumor size by 40%." in texts
 
 
-# ── Conflicts ──────────────────────────────────────────────────────────────────
+# ── Answers ────────────────────────────────────────────────────────────────────
 
-def test_list_conflicts_empty(job, api_key):
+def test_list_answers_empty(job, api_key):
     with schema_context("demo"):
         c = _client(api_key)
-        res = c.get(f"/api/evidence/jobs/{job.id}/conflicts/")
+        res = c.get(f"/api/evidence/jobs/{job.id}/answers/")
         assert res.status_code == 200
         assert res.json() == []
 
 
-def test_list_conflicts_with_data(job, conflict_pair, reward, api_key):
+def test_report_answer_counts(job, api_key):
     with schema_context("demo"):
         c = _client(api_key)
-        res = c.get(f"/api/evidence/jobs/{job.id}/conflicts/")
+        res = c.get(f"/api/evidence/jobs/{job.id}/report/")
         assert res.status_code == 200
-        conflicts = res.json()
-        assert len(conflicts) == 1
-        cp = conflicts[0]
-        assert cp["verdict"] == "CONTRADICTS"
-        assert cp["severity"] == 4
-        assert "reward" in cp
-        assert cp["reward"]["final_confidence"] == pytest.approx(0.97)
-        assert cp["final_confidence"] == pytest.approx(0.97)
-        assert cp["consistency_score"] == pytest.approx(1.0)
-        assert isinstance(cp["error_types"], list)
+        data = res.json()
+        assert "yes_count" in data
+        assert "no_count" in data
+        assert "maybe_count" in data
 
 
 # ── Dispatch ───────────────────────────────────────────────────────────────────
@@ -187,8 +181,7 @@ def test_get_report(job, api_key):
         data = res.json()
         assert data["job_id"] == job.id
         assert "total_claims" in data
-        assert "total_conflicts" in data
-        assert "contradictions" in data
-        assert "supports" in data
-        assert "partial" in data
-        assert "nei" in data
+        assert "total_answers" in data
+        assert "yes_count" in data
+        assert "no_count" in data
+        assert "maybe_count" in data

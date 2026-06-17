@@ -16,8 +16,8 @@ def dispatch_analysis_job(self, job_id: int):
     try:
         with schema_context(_SCHEMA):
             from apps.evidence.models import AnalysisJob
-            from apps.evidence.tasks.build_graph import build_conflict_graph
             from apps.evidence.tasks.extract_claims import extract_claims
+            from apps.evidence.tasks.answer_questions import answer_paper_questions
 
             job = AnalysisJob.objects.get(id=job_id)
             job.status = AnalysisJob.Status.RUNNING
@@ -36,11 +36,20 @@ def dispatch_analysis_job(self, job_id: int):
             extraction_group = group(
                 extract_claims.si(pid) for pid in paper_ids
             )
-            pipeline = chord(extraction_group)(
-                build_conflict_graph.si(job_id)
+
+            answer_group = group(
+                answer_paper_questions.si(pid, job.n_samples)
+                for pid in paper_ids
             )
+
+            pipeline = chord(extraction_group)(
+                chord(answer_group)(
+                    _mark_done.si(job_id)
+                )
+            )
+
             logger.info(
-                "Job %s: dispatched extraction for %d papers", job_id, len(paper_ids)
+                "Job %s: dispatched pipeline for %d papers", job_id, len(paper_ids)
             )
 
     except Exception as e:
@@ -56,3 +65,17 @@ def dispatch_analysis_job(self, job_id: int):
                 )
         except Exception as inner:
             logger.error("Could not mark job %s FAILED: %s", job_id, inner)
+
+
+@shared_task(bind=True, max_retries=0)
+def _mark_done(self, job_id: int):
+    try:
+        with schema_context(_SCHEMA):
+            from apps.evidence.models import AnalysisJob
+            job = AnalysisJob.objects.get(id=job_id)
+            job.status = AnalysisJob.Status.DONE
+            job.finished_at = timezone.now()
+            job.save(update_fields=["status", "finished_at"])
+            logger.info("Job %s: DONE", job_id)
+    except Exception as e:
+        logger.error("_mark_done failed for job %s: %s", job_id, e)

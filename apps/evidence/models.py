@@ -4,12 +4,14 @@ from django.db import models
 
 class AnalysisJob(models.Model):
     class Status(models.TextChoices):
-        PENDING = 'PENDING'
-        RUNNING = 'RUNNING'
-        DONE    = 'DONE'
-        FAILED  = 'FAILED'
+        PENDING  = 'PENDING'
+        RUNNING  = 'RUNNING'
+        DONE     = 'DONE'
+        FAILED   = 'FAILED'
 
-    status        = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status        = models.CharField(max_length=20,
+                                     choices=Status.choices,
+                                     default=Status.PENDING)
     n_samples     = models.IntegerField(default=3)
     result_s3_key = models.CharField(max_length=500, blank=True)
     started_at    = models.DateTimeField(null=True, blank=True)
@@ -24,7 +26,9 @@ class AnalysisJob(models.Model):
 
 
 class Paper(models.Model):
-    job             = models.ForeignKey(AnalysisJob, on_delete=models.CASCADE, related_name='papers')
+    job             = models.ForeignKey(AnalysisJob,
+                                        on_delete=models.CASCADE,
+                                        related_name='papers')
     title           = models.CharField(max_length=500, blank=True)
     abstract        = models.TextField(blank=True)
     s3_key          = models.CharField(max_length=500)
@@ -45,9 +49,13 @@ class Claim(models.Model):
         DESCRIPTIVE = 'descriptive'
         FACTUAL     = 'factual'
 
-    paper           = models.ForeignKey(Paper, on_delete=models.CASCADE, related_name='claims')
+    paper           = models.ForeignKey(Paper,
+                                        on_delete=models.CASCADE,
+                                        related_name='claims')
     text            = models.TextField()
-    claim_type      = models.CharField(max_length=20, choices=ClaimType.choices, default=ClaimType.FACTUAL)
+    claim_type      = models.CharField(max_length=20,
+                                       choices=ClaimType.choices,
+                                       default=ClaimType.FACTUAL)
     entities        = models.JSONField(default=list)
     section         = models.CharField(max_length=100, blank=True)
     source_sentence = models.TextField(blank=True)
@@ -61,50 +69,44 @@ class Claim(models.Model):
         return f"Claim {self.id}: {self.text[:60]}"
 
 
-class ConflictPair(models.Model):
-    class Verdict(models.TextChoices):
-        SUPPORTS    = 'SUPPORTS'
-        CONTRADICTS = 'CONTRADICTS'
-        PARTIAL     = 'PARTIAL'
-        NEI         = 'NEI'
+class AnswerRecord(models.Model):
+    class Answer(models.TextChoices):
+        YES   = 'yes'
+        NO    = 'no'
+        MAYBE = 'maybe'
 
-    class ConflictType(models.TextChoices):
-        DIRECT         = 'direct'
-        METHODOLOGICAL = 'methodological'
-        TEMPORAL       = 'temporal'
-        POPULATION     = 'population'
-        NONE           = 'none'
-
-    claim_a           = models.ForeignKey(Claim, on_delete=models.CASCADE, related_name='conflicts_as_a')
-    claim_b           = models.ForeignKey(Claim, on_delete=models.CASCADE, related_name='conflicts_as_b')
-    verdict           = models.CharField(max_length=20, choices=Verdict.choices)
-    conflict_type     = models.CharField(max_length=20, choices=ConflictType.choices, default=ConflictType.NONE)
-    severity          = models.IntegerField(null=True, blank=True)
-    reasoning         = models.TextField(blank=True)
-    source_sentence_a = models.TextField(blank=True)
-    source_sentence_b = models.TextField(blank=True)
-    error_types       = models.JSONField(
-        default=list,
-        blank=True,
-        help_text=(
-            "EvidenceLens error taxonomy: "
-            "overgeneralization, condition_dropping, false_certainty, "
-            "missing_evidence, unsupported_claim, wrong_evidence, "
-            "missing_limitation, contradiction_with_source, "
-            "conflict_ignored, paper_section_misread"
-        ),
-    )
-    created_at        = models.DateTimeField(auto_now_add=True)
+    paper           = models.ForeignKey(Paper,
+                                        on_delete=models.CASCADE,
+                                        related_name='answers')
+    question        = models.TextField()
+    answer          = models.CharField(max_length=10,
+                                       choices=Answer.choices)
+    gold_label      = models.CharField(max_length=10, blank=True)
+    reasoning       = models.TextField(blank=True)
+    source_sentence = models.TextField(blank=True)
+    error_types     = models.JSONField(default=list,
+                                       help_text=(
+                                           "EvidenceLens error taxonomy: "
+                                           "overgeneralization, condition_dropping, "
+                                           "false_certainty, missing_evidence, "
+                                           "unsupported_claim, wrong_evidence, "
+                                           "missing_limitation, "
+                                           "contradiction_with_source, "
+                                           "conflict_ignored, paper_section_misread"
+                                       ))
+    created_at      = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         app_label = "evidence"
 
     def __str__(self):
-        return f"ConflictPair {self.id}: {self.verdict}"
+        return f"AnswerRecord {self.id}: {self.answer} ({self.question[:40]})"
 
 
 class RewardScore(models.Model):
-    conflict_pair      = models.OneToOneField(ConflictPair, on_delete=models.CASCADE, related_name='reward')
+    answer_record      = models.OneToOneField(AnswerRecord,
+                                              on_delete=models.CASCADE,
+                                              related_name='reward')
     consistency_score  = models.FloatField(null=True, blank=True)
     nli_score          = models.FloatField(null=True, blank=True)
     faithfulness_score = models.FloatField(null=True, blank=True)

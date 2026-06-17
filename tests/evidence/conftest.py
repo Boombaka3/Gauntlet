@@ -71,35 +71,6 @@ def claim_b(paper_b):
 
 
 @pytest.fixture
-def conflict_pair(claim_a, claim_b):
-    with schema_context("demo"):
-        from apps.evidence.models import ConflictPair
-        cp = ConflictPair.objects.create(
-            claim_a=claim_a,
-            claim_b=claim_b,
-            verdict="CONTRADICTS",
-            conflict_type="direct",
-            severity=4,
-            reasoning="Papers disagree on tumor size effect.",
-        )
-        yield cp
-
-
-@pytest.fixture
-def reward(conflict_pair):
-    with schema_context("demo"):
-        from apps.evidence.models import RewardScore
-        r = RewardScore.objects.create(
-            conflict_pair=conflict_pair,
-            consistency_score=1.0,
-            faithfulness_score=0.9,
-            final_confidence=0.97,
-            n_samples=3,
-        )
-        yield r
-
-
-@pytest.fixture
 def api_key(db):
     with schema_context("public"):
         from django.contrib.auth import get_user_model

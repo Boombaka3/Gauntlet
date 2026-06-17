@@ -31,64 +31,84 @@ def test_claim_fk_to_paper(claim_a, paper_a):
         assert claim_a.text == "Drug X reduces tumor size by 40%."
 
 
-def test_conflict_pair_verdict_choices(claim_a, claim_b):
+def test_answer_record_default(paper_a):
     with schema_context("demo"):
-        from apps.evidence.models import ConflictPair
-        for verdict in ("SUPPORTS", "CONTRADICTS", "PARTIAL", "NEI"):
-            cp = ConflictPair(
-                claim_a=claim_a,
-                claim_b=claim_b,
-                verdict=verdict,
-                conflict_type="none",
-                severity=1,
-                error_types=[],
-            )
-            cp.full_clean()
-
-
-def test_conflict_pair_error_types_default(claim_a, claim_b):
-    with schema_context("demo"):
-        from apps.evidence.models import ConflictPair
-        cp = ConflictPair.objects.create(
-            claim_a=claim_a,
-            claim_b=claim_b,
-            verdict="NEI",
-            conflict_type="none",
-            severity=1,
+        from apps.evidence.models import AnswerRecord
+        ar = AnswerRecord.objects.create(
+            paper=paper_a,
+            question="Does Drug X reduce tumor size?",
+            answer="yes",
+            reasoning="The abstract states a 40% reduction.",
+            source_sentence="Drug X reduces tumor size by 40%.",
         )
-        assert cp.error_types == []
+        assert ar.answer == "yes"
+        assert ar.error_types == []
+        ar.delete()
 
 
-def test_conflict_pair_error_types_stored(conflict_pair):
+def test_answer_choices(paper_a):
     with schema_context("demo"):
-        from apps.evidence.models import ConflictPair
-        conflict_pair.error_types = ["overgeneralization", "false_certainty"]
-        conflict_pair.save()
-        refreshed = ConflictPair.objects.get(pk=conflict_pair.pk)
-        assert "overgeneralization" in refreshed.error_types
-        assert "false_certainty" in refreshed.error_types
+        from apps.evidence.models import AnswerRecord
+        for answer in ("yes", "no", "maybe"):
+            ar = AnswerRecord(
+                paper=paper_a,
+                question="Test?",
+                answer=answer,
+            )
+            ar.full_clean()
 
 
-def test_reward_score_all_nullable(conflict_pair):
+def test_reward_score_linked_to_answer(paper_a):
     with schema_context("demo"):
-        from apps.evidence.models import RewardScore
-        r = RewardScore.objects.create(conflict_pair=conflict_pair)
+        from apps.evidence.models import AnswerRecord, RewardScore
+        ar = AnswerRecord.objects.create(
+            paper=paper_a,
+            question="Test?",
+            answer="maybe",
+        )
+        r = RewardScore.objects.create(
+            answer_record=ar,
+            consistency_score=0.67,
+            final_confidence=0.67,
+        )
+        assert r.answer_record_id == ar.id
+        r.delete()
+        ar.delete()
+
+
+def test_reward_score_all_nullable(paper_a):
+    with schema_context("demo"):
+        from apps.evidence.models import AnswerRecord, RewardScore
+        ar = AnswerRecord.objects.create(
+            paper=paper_a,
+            question="Test?",
+            answer="maybe",
+        )
+        r = RewardScore.objects.create(answer_record=ar)
         assert r.consistency_score is None
         assert r.nli_score is None
         assert r.faithfulness_score is None
         assert r.final_confidence is None
+        r.delete()
+        ar.delete()
 
 
-def test_reward_score_with_values(reward):
+def test_reward_score_one_to_one(paper_a):
     with schema_context("demo"):
-        assert reward.consistency_score == pytest.approx(1.0)
-        assert reward.faithfulness_score == pytest.approx(0.9)
-        assert reward.final_confidence == pytest.approx(0.97)
-        assert reward.n_samples == 3
-
-
-def test_reward_score_one_to_one(conflict_pair, reward):
-    with schema_context("demo"):
-        from apps.evidence.models import ConflictPair
-        cp = ConflictPair.objects.select_related("reward").get(pk=conflict_pair.pk)
-        assert cp.reward.pk == reward.pk
+        from apps.evidence.models import AnswerRecord, RewardScore
+        ar = AnswerRecord.objects.create(
+            paper=paper_a,
+            question="Test?",
+            answer="yes",
+        )
+        r = RewardScore.objects.create(
+            answer_record=ar,
+            consistency_score=1.0,
+            faithfulness_score=0.9,
+            final_confidence=0.97,
+            n_samples=3,
+        )
+        refreshed = AnswerRecord.objects.select_related("reward").get(pk=ar.pk)
+        assert refreshed.reward.pk == r.pk
+        r.delete()
+        ar.delete()

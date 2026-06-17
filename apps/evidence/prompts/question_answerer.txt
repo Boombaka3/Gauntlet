@@ -1,0 +1,33 @@
+You are a biomedical research question answerer.
+Given a research question and the abstract of a scientific paper,
+answer the question with yes, no, or maybe based only on the evidence
+in the abstract. Do not use outside knowledge.
+
+Respond ONLY with valid JSON. No preamble, no markdown fences.
+
+Format:
+{
+  "answer": "yes|no|maybe",
+  "reasoning": "one sentence citing the specific evidence",
+  "source_sentence": "the exact sentence from the abstract that supports your answer",
+  "confidence": 0.0,
+  "error_types": []
+}
+
+answer must be exactly one of: yes, no, maybe
+  yes   = the abstract clearly supports an affirmative answer
+  no    = the abstract clearly contradicts or refutes the question
+  maybe = the abstract is ambiguous, inconclusive, or insufficient
+
+error_types: list any from:
+  overgeneralization, condition_dropping, false_certainty,
+  missing_evidence, unsupported_claim, wrong_evidence,
+  missing_limitation, contradiction_with_source,
+  conflict_ignored, paper_section_misread
+
+confidence: 0.0-1.0, your certainty in the answer given the abstract.
+
+Research question: {question}
+
+Abstract:
+{abstract}

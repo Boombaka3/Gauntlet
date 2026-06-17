@@ -91,7 +91,7 @@ def create_minimal_pdf(text: str) -> bytes:
 
 def get_test_paper_texts() -> tuple[str, str]:
     """
-    Load first conflict pair texts from EvidenceLens ground truth.
+    Load first pair texts from ground truth.
     Falls back to synthetic text if file not found.
     """
     import json
@@ -173,7 +173,6 @@ def main() -> None:
     print(f"    {r.json()}  OK")
 
     # ── Step 4: poll until DONE ───────────────────────────────────────────────
-    # If no NaviGator key, assert job at least reached RUNNING state
     has_real_key = bool(NAVIGATOR_KEY) and NAVIGATOR_KEY not in ("<your-navigator-api-key>", "placeholder", "")
 
     step(4, f"Polling GET /api/evidence/jobs/{job_id}/  (up to {POLL_TIMEOUT}s)")
@@ -186,9 +185,9 @@ def main() -> None:
             fail(f"poll returned {r.status_code}: {r.text}")
         body = r.json()
         status = body["status"]
-        claims = body.get("claims_count", 0)
-        conflicts = body.get("conflicts_count", 0)
-        print(f"    [{elapsed:>3}s] status={status}  claims={claims}  conflicts={conflicts}")
+        claims = body.get("claim_count", 0)
+        answers = body.get("answer_count", 0)
+        print(f"    [{elapsed:>3}s] status={status}  claims={claims}  answers={answers}")
         if status == "RUNNING":
             reached_running = True
         if status in ("DONE", "FAILED"):
@@ -199,7 +198,7 @@ def main() -> None:
 
     if not has_real_key:
         if reached_running or final_status in ("DONE", "FAILED"):
-            print("    SKIP conflict assertion — no API key")
+            print("    SKIP answer assertion — no API key")
             print(f"\nSmoke test PASSED  (job reached status={final_status or 'RUNNING'})")
             return
         fail(f"job did not reach RUNNING state within {POLL_TIMEOUT}s")
@@ -210,29 +209,29 @@ def main() -> None:
         fail(f"job finished with status={final_status}")
     print("    Job DONE  OK")
 
-    # ── Step 5: check conflicts ───────────────────────────────────────────────
-    step(5, f"GET /api/evidence/jobs/{job_id}/conflicts/")
-    r = client.get(f"/api/evidence/jobs/{job_id}/conflicts/")
+    # ── Step 5: check answers ─────────────────────────────────────────────────
+    step(5, f"GET /api/evidence/jobs/{job_id}/answers/")
+    r = client.get(f"/api/evidence/jobs/{job_id}/answers/")
     if r.status_code != 200:
-        fail(f"conflicts returned {r.status_code}: {r.text}")
+        fail(f"answers returned {r.status_code}: {r.text}")
 
-    conflicts_data = r.json()
-    if not conflicts_data:
-        print("    WARNING: no ConflictPairs found — check OPENAI_API_KEY / NaviGator and Celery logs")
-        print(f"\nSmoke test PASSED  (job DONE; 0 conflicts — may need larger PDFs)")
+    answers_data = r.json()
+    if not answers_data:
+        print("    WARNING: no AnswerRecords found — check OPENAI_API_KEY / NaviGator and Celery logs")
+        print(f"\nSmoke test PASSED  (job DONE; 0 answers — may need larger PDFs)")
         return
 
-    for cp in conflicts_data:
-        verdict = cp.get("verdict")
-        reward = cp.get("reward") or {}
-        confidence = reward.get("final_confidence")
-        print(f"    conflict_id={cp['id']}  verdict={verdict}  confidence={confidence}")
-        assert verdict is not None, f"ConflictPair {cp['id']} missing verdict"
-        assert confidence is not None, f"ConflictPair {cp['id']} missing final_confidence"
+    valid_answers = {"yes", "no", "maybe"}
+    for ar in answers_data:
+        answer = ar.get("answer")
+        confidence = ar.get("final_confidence")
+        question_preview = ar.get("question", "")[:50]
+        print(f"    answer_id={ar['id']}  answer={answer}  confidence={confidence}  q={question_preview!r}")
+        assert answer in valid_answers, f"AnswerRecord {ar['id']} has invalid answer: {answer!r}"
 
     print(
         f"\nSmoke test PASSED"
-        f"  ({len(conflicts_data)} ConflictPair(s) with verdicts and confidence scores)"
+        f"  ({len(answers_data)} AnswerRecord(s) with yes/no/maybe answers)"
     )
 
 

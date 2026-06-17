@@ -1,66 +1,81 @@
 # apps/evidence/scoring/reward_voting.py
+import logging
 from collections import Counter
-
-from apps.evidence.models import Claim, ConflictPair, RewardScore
-from apps.evidence.scoring.conflict_judge import judge_conflict
+from apps.evidence.models import Paper, AnswerRecord, RewardScore
+from apps.evidence.scoring.question_answerer import answer_question
 from apps.evidence.scoring.faithfulness import score_faithfulness
 
+logger = logging.getLogger(__name__)
 
-def compute_reward(
-    claim_a: Claim,
-    claim_b: Claim,
-    n_samples: int = 3,
-) -> tuple[ConflictPair, RewardScore]:
-    verdicts = []
-    last_pair = None
+
+def compute_reward(paper: Paper,
+                   question: str,
+                   n_samples: int = 3) -> tuple[AnswerRecord, RewardScore]:
+    """
+    Run answer_question N times on the same paper+question.
+    Majority answer wins. Consistency = majority_count / N.
+    Faithfulness scores the winning answer against its source sentence.
+    Returns unsaved (AnswerRecord, RewardScore).
+    """
+    answers = []
+    last_record = None
 
     for _ in range(n_samples):
         try:
-            pair = judge_conflict(claim_a, claim_b)
-            verdicts.append(pair.verdict)
-            last_pair = pair
-        except Exception:
-            verdicts.append("NEI")
+            record = answer_question(paper, question)
+            answers.append(record.answer)
+            last_record = record
+        except Exception as e:
+            logger.error(f"answer_question failed in voting loop: {e}")
+            answers.append("maybe")
 
-    counts = Counter(verdicts)
-    majority_verdict, majority_count = counts.most_common(1)[0]
+    counts = Counter(answers)
+    majority_answer, majority_count = counts.most_common(1)[0]
     consistency = majority_count / n_samples
 
-    if last_pair is None:
-        last_pair = ConflictPair(
-            claim_a=claim_a,
-            claim_b=claim_b,
-            verdict="NEI",
-            conflict_type="none",
-            severity=1,
+    if last_record is None:
+        last_record = AnswerRecord(
+            paper=paper,
+            question=question,
+            answer="maybe",
             reasoning="all runs failed",
+            source_sentence="",
             error_types=[],
         )
-    last_pair.verdict = majority_verdict
 
-    fa = score_faithfulness(claim_a.text, claim_a.source_sentence)
-    fb = score_faithfulness(claim_b.text, claim_b.source_sentence)
+    last_record.answer = majority_answer
 
-    scores = [
-        s
-        for s in [fa.get("faithfulness_score"), fb.get("faithfulness_score")]
-        if s is not None
-    ]
-    faithfulness = sum(scores) / len(scores) if scores else None
+    faithfulness_result = None
+    if last_record.source_sentence and last_record.reasoning:
+        try:
+            faithfulness_result = score_faithfulness(
+                last_record.reasoning,
+                last_record.source_sentence,
+            )
+        except Exception as e:
+            logger.error(f"Faithfulness scoring failed: {e}")
 
-    error_types = list(set(fa.get("error_types", []) + fb.get("error_types", [])))
-    last_pair.error_types = error_types
+    faithfulness_score = (
+        faithfulness_result.get("faithfulness_score")
+        if faithfulness_result else None
+    )
 
-    if faithfulness is not None:
-        final_confidence = 0.7 * consistency + 0.3 * faithfulness
+    if faithfulness_result and faithfulness_result.get("error_types"):
+        existing = set(last_record.error_types or [])
+        existing.update(faithfulness_result["error_types"])
+        last_record.error_types = list(existing)
+
+    if faithfulness_score is not None:
+        final_confidence = 0.7 * consistency + 0.3 * faithfulness_score
     else:
         final_confidence = consistency
 
     reward = RewardScore(
         consistency_score=consistency,
         nli_score=None,
-        faithfulness_score=faithfulness,
+        faithfulness_score=faithfulness_score,
         final_confidence=final_confidence,
         n_samples=n_samples,
     )
-    return last_pair, reward
+
+    return last_record, reward
