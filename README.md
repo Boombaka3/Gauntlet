@@ -1,49 +1,42 @@
 # EvidenceTrace
 
-Detects contradictions between biomedical research papers.
+Answers research questions from biomedical papers with calibrated confidence.
 
-Upload PDFs. The system extracts factual claims, compares them across papers,
-and flags conflicts -- ranked by RL confidence score.
+Upload PDFs. Ask a research question. The system extracts structured claims
+from each paper, answers yes/no/maybe using the abstract as evidence, and
+scores each answer with an RL confidence measure -- N-sample consistency
+voting combined with faithfulness scoring.
 
-![Jobs dashboard](docs/screenshots/01_jobs_list.png)
-
----
-
-## What it does
-
-- Parses research PDFs into section-level text, extracts structured claims via LLM
-- Runs pairwise conflict judgment across papers (N independent runs per pair)
-- Scores each verdict: consistency = majority(N runs), faithfulness = claim vs source sentence
-- Final confidence = 0.7 * consistency + 0.3 * faithfulness
-
-![Conflict results](docs/screenshots/03_conflicts.png)
+![Chat interface -- ask questions over stored biomedical evidence](docs/screenshots/02_chat.png)
 
 ---
 
-## Interesting technical decisions
+## The problem
 
-**Why N-sample voting instead of single LLM judgment**
-A single LLM verdict has unknown reliability. Running the same judgment 3 times
-and taking the majority gives a consistency score (agreement rate) that correlates
-with verdict correctness. This is the RL reward signal -- not a trained model,
-but a calibrated confidence estimate from repeated sampling.
+Reconciling conflicting evidence across clinical trial literature is
+manual, slow, and error-prone. EvidenceTrace runs each judgment N times
+and measures agreement -- that consistency rate is the RL reward signal.
 
-**Why the pipeline is async**
-Claim extraction and conflict judgment are slow (2-5s per LLM call).
-A job with 3 papers and 5 claims per paper = 75 pairwise comparisons x 3 samples = 225 LLM calls.
-Celery fans out all comparisons in parallel using group+chord.
-The chord callback fires score_all_results only after every task completes.
+---
 
-**Why schema-per-tenant instead of row-level isolation**
-django-tenants creates a separate PostgreSQL schema per organization.
-Tenant A's tables are physically separate from Tenant B's --
-not filtered by a tenant_id column. Cross-tenant data leaks are impossible
-at the database level, not just the application level.
+## Two decisions worth explaining
 
-**Why NaviGator Toolkit instead of Anthropic/OpenAI directly**
-UF HiPerGator provides llama-3.3-70b-instruct locally via an OpenAI-compatible API.
-Switching models is one line in .env (NAVIGATOR_MODEL=medgemma-27b-it
-for medical domain). Zero cost for testing.
+**N-sample consistency voting**
+
+Running each judgment N times gives a consistency score (agreement rate)
+that correlates with correctness. Combined with a faithfulness signal
+(does the claim appear in the source sentence?):
+
+final_confidence = 0.7 * consistency + 0.3 * faithfulness
+
+**Why Celery chord**
+
+Celery fans all LLM calls out in parallel. A chord callback fires
+score_all_results only after every task completes. One timeout does not
+abort the run.
+
+After claims are answered, a chat endpoint queries stored AnswerRecords
+and returns grounded responses with per-paper source citations.
 
 ---
 
@@ -51,32 +44,53 @@ for medical domain). Zero cost for testing.
 
 | Layer | Choice |
 |---|---|
-| API | Django 5 + Django Ninja (Pydantic schemas, not DRF) |
-| Multi-tenancy | django-tenants (schema-per-tenant PostgreSQL) |
+| API | Django 5 + Django Ninja |
+| Multi-tenancy | django-tenants (schema per tenant, not row-level) |
 | Async | Celery group+chord, Redis broker |
-| Storage | S3-compatible (MinIO local, S3 prod) |
-| LLM | UF NaviGator Toolkit -- llama-3.3-70b-instruct on HiPerGator |
-| Frontend | React 19 + Vite + Tailwind (Linear design system) |
-| Auth | X-API-Key header on write endpoints, GET endpoints public |
+| Storage | S3-compatible (MinIO local) |
+| LLM | UF NaviGator -- llama-3.3-70b-instruct on HiPerGator |
+| Frontend | React 19 + Vite + Tailwind |
+| Auth | GET endpoints public, POST requires X-API-Key |
 
 ---
 
-## Numbers
+## Screenshots
 
-- 40 pytest tests (models, API, scoring, RL pipeline)
-- 4,960 benchmark records (SciFact 693 + PubMedQA 1,000 + QASPER 3,267)
-- 5 ground truth conflict pairs from EvidenceLens (100% detection rate)
-- EvidenceLens baseline: 24.5% error rate in LLM biomedical summaries
+### Analysis jobs dashboard -- 3 completed biomedical analyses
+![Jobs list](docs/screenshots/01_jobs_list.png)
+
+### Chat interface -- natural language queries over stored evidence
+![Chat](docs/screenshots/02_chat.png)
+
+### QA results with yes/no/maybe answers and RL confidence scores
+![Results](docs/screenshots/03_results.png)
+
+### REST API -- auto-generated Swagger documentation
+![API docs](docs/screenshots/04_api_docs.png)
 
 ---
 
-## Run locally
+## It works
+
+- 37 pytest tests (models, API, scoring, RL pipeline)
+- Chat interface tested on 3 seeded biomedical jobs:
+  - Hypothalamic glutamate and energy regulation
+  - HPV screening vs conventional cytology
+  - IFN-gamma in autoimmune myocarditis
+- LLM returns grounded answers with source citations drawn from stored AnswerRecords.
+  No hallucination risk -- responses are constrained to evidence in the database.
+
+Built on EvidenceLens findings: 24.5% error rate in single-judgment LLM audits.
+
+---
+
+## Run it
 
 ```
 git clone https://github.com/Boombaka3/Gauntlet
 cd Gauntlet/llm_eval_harness
 cp .env.example .env
-# OPENAI_API_KEY = your NaviGator key (api.ai.it.ufl.edu/ui)
+# OPENAI_API_KEY = NaviGator key from api.ai.it.ufl.edu/ui
 # NAVIGATOR_MODEL = llama-3.3-70b-instruct
 
 PowerShell -ExecutionPolicy Bypass -File bin/start_stack.ps1
@@ -86,31 +100,6 @@ PowerShell -ExecutionPolicy Bypass -File bin/dev.ps1
 uv run python scripts/smoke_test.py
 ```
 
----
+API docs at /api/docs (Swagger). GET endpoints public, POST require key.
 
-## API
-
-GET endpoints are public. POST endpoints require X-API-Key.
-
-| Method | Path | Description |
-|---|---|---|
-| POST | /api/evidence/jobs/ | Create job |
-| POST | /api/evidence/jobs/{id}/papers/ | Upload PDF |
-| POST | /api/evidence/jobs/{id}/dispatch/ | Start pipeline |
-| GET | /api/evidence/jobs/{id}/conflicts/ | Results |
-| GET | /api/evidence/jobs/{id}/report/ | Summary |
-
-Full docs at /api/docs (Swagger, auto-generated).
-
-![API docs](docs/screenshots/04_api_docs.png)
-
----
-
-## Related
-
-- EvidenceLens (github.com/Boombaka3/EvidenceLens) -- research prototype
-  that established the baseline metrics above. EvidenceTrace is the
-  production backend built on those findings.
-
-- Gauntlet -- LLM evaluation harness on the same infrastructure.
-  Separate project, same repo, main branch.
+EvidenceLens (research baseline): github.com/Boombaka3/EvidenceLens
