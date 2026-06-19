@@ -51,6 +51,9 @@ export async function uploadPaper(jobId, file, title = '') {
   return res.json()
 }
 
+export const listAnswers = (id) => request('GET',  `/evidence/jobs/${id}/answers/`)
+export const chatWithJob = (id, question) => request('POST', `/evidence/jobs/${id}/chat/`, { question })
+
 export async function deletePaper(paperId) {
   const h = {}
   if (API_KEY) h['X-API-Key'] = API_KEY

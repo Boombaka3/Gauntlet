@@ -25,6 +25,8 @@ TEST_DATA = Path(__file__).parent / "test_data"
 API_KEY = os.environ.get("GAUNTLET_API_KEY", os.environ.get("DJANGO_SUPERUSER_API_KEY", ""))
 NAVIGATOR_KEY = os.environ.get("OPENAI_API_KEY", "")
 NAVIGATOR_MODEL = os.environ.get("NAVIGATOR_MODEL", "llama-3.3-70b-instruct")
+# Set SMOKE_SYNC=1 to use /dispatch-sync/ instead of Celery /dispatch/
+USE_SYNC = os.environ.get("SMOKE_SYNC", "0") == "1"
 
 
 def _headers() -> dict:
@@ -166,11 +168,24 @@ def main() -> None:
         print(f"    {filename} id={r.json()['id']}  OK")
 
     # ── Step 3: dispatch job ──────────────────────────────────────────────────
-    step(3, f"POST /api/evidence/jobs/{job_id}/dispatch/")
-    r = client.post(f"/api/evidence/jobs/{job_id}/dispatch/")
-    if r.status_code not in (200, 201):
-        fail(f"dispatch returned {r.status_code}: {r.text}")
-    print(f"    {r.json()}  OK")
+    if USE_SYNC:
+        step(3, f"POST /api/evidence/jobs/{job_id}/dispatch-sync/  (sync mode, no Celery)")
+        r = client.post(f"/api/evidence/jobs/{job_id}/dispatch-sync/", timeout=120.0)
+        if r.status_code not in (200, 201):
+            fail(f"dispatch-sync returned {r.status_code}: {r.text}")
+        sync_body = r.json()
+        print(f"    {sync_body}  OK")
+        step(4, "Job completed synchronously")
+        print(f"    status=DONE  papers={sync_body.get('papers')}  "
+              f"claims={sync_body.get('claims')}  answers={sync_body.get('answers')}")
+        print(f"\nSmoke test PASSED  (sync dispatch: job reached status=DONE)")
+        return
+    else:
+        step(3, f"POST /api/evidence/jobs/{job_id}/dispatch/")
+        r = client.post(f"/api/evidence/jobs/{job_id}/dispatch/")
+        if r.status_code not in (200, 201):
+            fail(f"dispatch returned {r.status_code}: {r.text}")
+        print(f"    {r.json()}  OK")
 
     # ── Step 4: poll until DONE ───────────────────────────────────────────────
     has_real_key = bool(NAVIGATOR_KEY) and NAVIGATOR_KEY not in ("<your-navigator-api-key>", "placeholder", "")

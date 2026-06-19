@@ -85,6 +85,7 @@ class AnswerRecord(models.Model):
     reasoning       = models.TextField(blank=True)
     source_sentence = models.TextField(blank=True)
     error_types     = models.JSONField(default=list,
+                                       blank=True,
                                        help_text=(
                                            "EvidenceLens error taxonomy: "
                                            "overgeneralization, condition_dropping, "

@@ -64,6 +64,10 @@ class AskIn(Schema):
     question: str
 
 
+class ChatMessageIn(Schema):
+    question: str
+
+
 class ReportOut(Schema):
     job_id: int
     status: str

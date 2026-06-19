@@ -89,15 +89,15 @@ export default function Jobs() {
         {jobs && jobs.length > 0 && !isMock && (() => {
           const totalJobs      = jobs.length
           const doneJobs       = jobs.filter(j => j.status === 'DONE').length
-          const totalConflicts = jobs.reduce((s, j) => s + (j.conflicts_count || 0), 0)
-          const totalClaims    = jobs.reduce((s, j) => s + (j.claims_count || 0), 0)
+          const totalAnswers = jobs.reduce((s, j) => s + (j.answer_count || j.conflicts_count || 0), 0)
+          const totalClaims = jobs.reduce((s, j) => s + (j.claim_count  || j.claims_count    || 0), 0)
           return (
             <div className="grid grid-cols-4 gap-3 mb-6">
               {[
-                { label: 'Analyses',          value: totalJobs      },
-                { label: 'Completed',         value: doneJobs       },
-                { label: 'Claims extracted',  value: totalClaims    },
-                { label: 'Conflicts detected',value: totalConflicts },
+                { label: 'Analyses',         value: totalJobs    },
+                { label: 'Completed',        value: doneJobs     },
+                { label: 'Claims extracted', value: totalClaims  },
+                { label: 'Answers scored',   value: totalAnswers },
               ].map(s => (
                 <div key={s.label}
                   className="bg-[#0f1011] border border-[#23252a] rounded-[8px] p-4">
@@ -140,7 +140,7 @@ export default function Jobs() {
           <table className="w-full">
             <thead>
               <tr className="bg-[#0f1011] border-y border-[#23252a]">
-                {['#', 'Status', 'Papers', 'Claims', 'Conflicts', 'Created', 'Actions'].map(h => (
+                {['#', 'Status', 'Papers', 'Claims', 'Answers', 'Created', 'Actions'].map(h => (
                   <th key={h}
                     className="text-[#8a8f98] text-[11px] font-medium uppercase tracking-wider
                                px-4 py-3 text-left">
@@ -158,24 +158,32 @@ export default function Jobs() {
                     <StatusBadge status={job.status} size="sm" />
                   </td>
                   <td className="px-4 py-3 text-[#d0d6e0] font-mono text-xs">
-                    {job.papers_count ?? 0}
+                    {job.paper_count ?? job.papers_count ?? 0}
                   </td>
                   <td className="px-4 py-3 text-[#d0d6e0] font-mono text-xs">
-                    {job.claims_count ?? 0}
+                    {job.claim_count ?? job.claims_count ?? 0}
                   </td>
                   <td className="px-4 py-3 text-[#d0d6e0] font-mono text-xs">
-                    {job.conflicts_count ?? 0}
+                    {job.answer_count ?? job.conflicts_count ?? 0}
                   </td>
                   <td className="px-4 py-3 text-[#8a8f98] text-xs">
                     {fmtDate(job.created_at)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 flex items-center gap-3">
                     <Link
                       to={`/jobs/${job.id}`}
                       className="text-[#5e6ad2] hover:text-[#828fff] text-xs transition-colors"
                     >
                       Papers →
                     </Link>
+                    {job.status === 'DONE' && (
+                      <Link
+                        to={`/jobs/${job.id}/chat`}
+                        className="text-[#8a8f98] hover:text-[#5e6ad2] text-xs font-mono transition-colors"
+                      >
+                        Chat →
+                      </Link>
+                    )}
                   </td>
                 </tr>
               ))}

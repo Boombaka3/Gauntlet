@@ -1,5 +1,7 @@
 # apps/evidence/router.py
+import json
 import logging
+import os
 
 import boto3
 from django.conf import settings
@@ -11,6 +13,7 @@ from apps.evidence.models import AnalysisJob, AnswerRecord, Claim, Paper, Reward
 from apps.evidence.schemas import (
     AnswerRecordOut,
     AskIn,
+    ChatMessageIn,
     ClaimOut,
     JobIn,
     JobOut,
@@ -347,6 +350,102 @@ def ask_question(request, job_id: int, payload: AskIn):
             logger.error(f"ask_question failed for paper {paper.id}: {e}")
 
     return results
+
+
+# ── Chat ──────────────────────────────────────────────────────────────────────
+
+@router.post("/jobs/{job_id}/chat/", response={200: dict})
+def chat_with_evidence(request, job_id: int, payload: ChatMessageIn):
+    """
+    Natural language chat over stored evidence for a job.
+    Queries AnswerRecord + Claim tables, calls LLM with structured context,
+    returns natural language response with citations. Read-only.
+    """
+    from django.shortcuts import get_object_or_404
+    from apps.evidence.adapters.openai import OpenAICompatAdapter
+
+    _logger = logging.getLogger(__name__)
+    job = get_object_or_404(AnalysisJob, id=job_id)
+
+    answers = list(
+        AnswerRecord.objects.filter(paper__job=job)
+        .select_related("paper", "reward")
+        .order_by("-reward__final_confidence")[:10]
+    )
+    claims = list(
+        Claim.objects.filter(paper__job=job)
+        .select_related("paper")[:20]
+    )
+
+    context_parts = []
+    if answers:
+        context_parts.append("EVIDENCE QA RESULTS:")
+        for ar in answers:
+            reward = getattr(ar, "reward", None)
+            conf = f"{reward.final_confidence:.2f}" if reward and reward.final_confidence else "?"
+            context_parts.append(
+                f"  Q: {ar.question}\n"
+                f"  A: {ar.answer.upper()} (confidence={conf})\n"
+                f"  Reasoning: {ar.reasoning}\n"
+                f"  Source: {ar.source_sentence}\n"
+                f"  Paper: {ar.paper.title}"
+            )
+    if claims:
+        context_parts.append("\nEXTRACTED CLAIMS:")
+        for cl in claims[:10]:
+            context_parts.append(
+                f"  [{cl.claim_type}] {cl.text} (paper: {cl.paper.title[:50]})"
+            )
+
+    context = "\n".join(context_parts)
+
+    sources = []
+    seen_papers: set = set()
+    for ar in answers[:5]:
+        if ar.paper_id not in seen_papers:
+            seen_papers.add(ar.paper_id)
+            reward = getattr(ar, "reward", None)
+            sources.append({
+                "paper": ar.paper.title,
+                "answer": ar.answer,
+                "confidence": reward.final_confidence if reward else None,
+                "source_sentence": ar.source_sentence,
+            })
+
+    model_id = os.environ.get("NAVIGATOR_MODEL", "llama-3.3-70b-instruct")
+    adapter = OpenAICompatAdapter(model_id=model_id)
+
+    system_prompt = (
+        "You are a biomedical evidence assistant. "
+        "Answer the user's question using ONLY the evidence context provided. "
+        "Be concise and specific. Cite paper titles when making claims. "
+        "If the evidence is insufficient, say so clearly. "
+        "Do not use outside knowledge."
+    )
+    user_prompt = f"Evidence context:\n{context}\n\nUser question: {payload.question}"
+
+    try:
+        result = adapter.complete(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=512,
+        )
+        answer_text = result.output if not result.error else (
+            "I could not generate a response. Please try again."
+        )
+    except Exception as e:
+        _logger.error(f"Chat LLM call failed: {e}")
+        answer_text = "I could not generate a response. Please try again."
+
+    return {
+        "question": payload.question,
+        "answer": answer_text,
+        "sources": sources,
+        "model": model_id,
+        "job_id": job_id,
+        "context_answers": len(answers),
+        "context_claims": len(claims),
+    }
 
 
 # ── Report ────────────────────────────────────────────────────────────────────

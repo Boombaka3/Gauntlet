@@ -71,9 +71,10 @@ def answer_question(paper: Paper, question: str) -> AnswerRecord:
         for k in ("abstract", "body")
         if paper.parsed_sections.get(k)
     )
-    prompt = PROMPT_TEMPLATE.format(
-        question=question.strip(),
-        abstract=abstract[:3000],
+    prompt = (
+        PROMPT_TEMPLATE
+        .replace("{question}", question.strip())
+        .replace("{abstract}", abstract[:3000])
     )
     try:
         adapter = _get_adapter()
@@ -111,9 +112,10 @@ def answer_question_text(question: str,
     Text-only version for benchmarking. No ORM objects created.
     Returns dict with answer, reasoning, source_sentence, confidence, error_types.
     """
-    prompt = PROMPT_TEMPLATE.format(
-        question=question.strip(),
-        abstract=abstract[:3000],
+    prompt = (
+        PROMPT_TEMPLATE
+        .replace("{question}", question.strip())
+        .replace("{abstract}", abstract[:3000])
     )
     try:
         adapter = _get_adapter()

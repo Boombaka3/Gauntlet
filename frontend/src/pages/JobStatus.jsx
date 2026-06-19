@@ -70,18 +70,18 @@ export default function JobStatus() {
     }
   }, [job?.status, id, navigate])
 
-  const msg        = STATUS_MSG[job?.status] || STATUS_MSG.PENDING
-  const claimsEst  = (job?.papers_count ?? 0) * 6
-  const isRunning  = job?.status === 'RUNNING'
-  const paperCount = job?.papers_count ?? 0
-  const claimCount = job?.claims_count ?? 0
-  const confCount  = job?.conflicts_count ?? 0
+  const msg         = STATUS_MSG[job?.status] || STATUS_MSG.PENDING
+  const isRunning   = job?.status === 'RUNNING'
+  const paperCount  = job?.paper_count ?? job?.papers_count ?? 0
+  const claimCount  = job?.claim_count ?? job?.claims_count ?? 0
+  const answerCount = job?.answer_count ?? job?.conflicts_count ?? 0
+  const claimsEst   = paperCount * 6
 
   const stages = [
-    { label: 'PDF Upload',         done: paperCount > 0 },
-    { label: 'Claim Extraction',   done: claimCount > 0 },
-    { label: 'Conflict Detection', done: confCount > 0  },
-    { label: 'RL Scoring',         done: job?.status === 'DONE' },
+    { label: 'PDF Upload',        done: paperCount  > 0 },
+    { label: 'Claim Extraction',  done: claimCount  > 0 },
+    { label: 'QA Answering',      done: answerCount > 0 },
+    { label: 'RL Scoring',        done: job?.status === 'DONE' },
   ]
 
   const currentStageIdx = isRunning
@@ -135,10 +135,10 @@ export default function JobStatus() {
           )}
 
           <div className="grid grid-cols-2 gap-2 font-mono text-xs text-[#62666d]">
-            <span>Papers:    <span className="text-[#d0d6e0]">{paperCount}</span></span>
-            <span>Samples:   <span className="text-[#d0d6e0]">{job?.n_samples ?? 1}</span></span>
-            <span>Claims:    <span className="text-[#d0d6e0]">{claimCount}</span></span>
-            <span>Conflicts: <span className="text-[#d0d6e0]">{confCount}</span></span>
+            <span>Papers:  <span className="text-[#d0d6e0]">{paperCount}</span></span>
+            <span>Samples: <span className="text-[#d0d6e0]">{job?.n_samples ?? 1}</span></span>
+            <span>Claims:  <span className="text-[#d0d6e0]">{claimCount}</span></span>
+            <span>Answers: <span className="text-[#d0d6e0]">{answerCount}</span></span>
           </div>
 
           <p className={`text-sm ${msg.color}`}>{msg.text}</p>
@@ -177,15 +177,25 @@ export default function JobStatus() {
         </div>
 
         {/* Actions */}
-        <div className="mt-4 flex gap-3">
+        <div className="mt-4 flex gap-3 flex-wrap">
           {job?.status === 'DONE' && (
-            <Link
-              to={`/jobs/${id}/conflicts`}
-              className="px-4 py-2 bg-[#5e6ad2] hover:bg-[#828fff] text-white
-                         text-sm rounded-[8px] transition-colors"
-            >
-              View Conflicts →
-            </Link>
+            <>
+              <Link
+                to={`/jobs/${id}/conflicts`}
+                className="px-4 py-2 bg-[#5e6ad2] hover:bg-[#828fff] text-white
+                           text-sm rounded-[8px] transition-colors"
+              >
+                View Results →
+              </Link>
+              <Link
+                to={`/jobs/${id}/chat`}
+                className="px-4 py-2 bg-[#0f1011] border border-[#23252a]
+                           hover:border-[#5e6ad2] text-[#d0d6e0] hover:text-[#f7f8f8]
+                           text-sm rounded-[8px] transition-colors font-mono"
+              >
+                Chat with Evidence →
+              </Link>
+            </>
           )}
           {job?.status === 'FAILED' && (
             <Link
