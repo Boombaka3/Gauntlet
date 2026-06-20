@@ -84,6 +84,32 @@ Built on EvidenceLens findings: 24.5% error rate in single-judgment LLM audits.
 
 ---
 
+## Results
+
+SciFact benchmark (50 records, stratified, zero-shot llama-3.3-70b):
+
+| Verdict | Correct | Total | Recall |
+|---|---:|---:|---:|
+| SUPPORTS | 21 | 25 | 84% |
+| CONTRADICTS | 22 | 25 | 88% |
+| MAYBE | N/A | 0 | N/A |
+| Overall | 43 | 50 | 86% |
+
+Four-component reward (Med-RLVR + MedRAGChecker):
+
+- Format score: 100% (structured `<think>`/`<answer>` adopted)
+- NLI grounding: 0.21 avg (`cross-encoder/nli-MiniLM2-L6-H768`)
+- Consistency: 1.00 avg (`n_samples=1` for benchmark speed)
+- Outcome reward: 0.86 avg (vs gold labels)
+
+Previous (conflict detection, biased sample): 60% (30/50).
+This run (QA task, stratified sample): 86% (43/50).
+
+Note: the bundled SciFact records contain SUPPORTS and CONTRADICTS labels only.
+Production uses `n_samples=3` for better consistency scores.
+
+---
+
 ## Run it
 
 ```
